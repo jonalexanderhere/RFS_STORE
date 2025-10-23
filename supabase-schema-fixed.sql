@@ -317,24 +317,57 @@ CREATE POLICY "Admins can view audit logs" ON public.audit_logs
 CREATE POLICY "System can create audit logs" ON public.audit_logs
     FOR INSERT WITH CHECK (true);
 
+-- Add missing columns if they don't exist (for existing tables)
+DO $$ 
+BEGIN
+    -- Add is_read to notifications if not exists
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_schema = 'public' 
+        AND table_name = 'notifications' 
+        AND column_name = 'is_read'
+    ) THEN
+        ALTER TABLE public.notifications ADD COLUMN is_read BOOLEAN DEFAULT false;
+    END IF;
+END $$;
+
+-- Drop existing indexes if they exist
+DROP INDEX IF EXISTS idx_profiles_role;
+DROP INDEX IF EXISTS idx_services_active;
+DROP INDEX IF EXISTS idx_services_category;
+DROP INDEX IF EXISTS idx_orders_user_id;
+DROP INDEX IF EXISTS idx_orders_service_id;
+DROP INDEX IF EXISTS idx_orders_status;
+DROP INDEX IF EXISTS idx_orders_created_at;
+DROP INDEX IF EXISTS idx_invoices_user_id;
+DROP INDEX IF EXISTS idx_invoices_order_id;
+DROP INDEX IF EXISTS idx_invoices_status;
+DROP INDEX IF EXISTS idx_payment_proofs_invoice_id;
+DROP INDEX IF EXISTS idx_payment_proofs_user_id;
+DROP INDEX IF EXISTS idx_payment_proofs_verified;
+DROP INDEX IF EXISTS idx_notifications_user_id;
+DROP INDEX IF EXISTS idx_notifications_is_read;
+DROP INDEX IF EXISTS idx_audit_logs_user_id;
+DROP INDEX IF EXISTS idx_audit_logs_table_name;
+
 -- Create indexes for better performance
-CREATE INDEX IF NOT EXISTS idx_profiles_role ON public.profiles(role);
-CREATE INDEX IF NOT EXISTS idx_services_active ON public.services(is_active);
-CREATE INDEX IF NOT EXISTS idx_services_category ON public.services(category);
-CREATE INDEX IF NOT EXISTS idx_orders_user_id ON public.orders(user_id);
-CREATE INDEX IF NOT EXISTS idx_orders_service_id ON public.orders(service_id);
-CREATE INDEX IF NOT EXISTS idx_orders_status ON public.orders(status);
-CREATE INDEX IF NOT EXISTS idx_orders_created_at ON public.orders(created_at DESC);
-CREATE INDEX IF NOT EXISTS idx_invoices_user_id ON public.invoices(user_id);
-CREATE INDEX IF NOT EXISTS idx_invoices_order_id ON public.invoices(order_id);
-CREATE INDEX IF NOT EXISTS idx_invoices_status ON public.invoices(status);
-CREATE INDEX IF NOT EXISTS idx_payment_proofs_invoice_id ON public.payment_proofs(invoice_id);
-CREATE INDEX IF NOT EXISTS idx_payment_proofs_user_id ON public.payment_proofs(user_id);
-CREATE INDEX IF NOT EXISTS idx_payment_proofs_verified ON public.payment_proofs(verified);
-CREATE INDEX IF NOT EXISTS idx_notifications_user_id ON public.notifications(user_id);
-CREATE INDEX IF NOT EXISTS idx_notifications_is_read ON public.notifications(is_read);
-CREATE INDEX IF NOT EXISTS idx_audit_logs_user_id ON public.audit_logs(user_id);
-CREATE INDEX IF NOT EXISTS idx_audit_logs_table_name ON public.audit_logs(table_name);
+CREATE INDEX idx_profiles_role ON public.profiles(role);
+CREATE INDEX idx_services_active ON public.services(is_active);
+CREATE INDEX idx_services_category ON public.services(category);
+CREATE INDEX idx_orders_user_id ON public.orders(user_id);
+CREATE INDEX idx_orders_service_id ON public.orders(service_id);
+CREATE INDEX idx_orders_status ON public.orders(status);
+CREATE INDEX idx_orders_created_at ON public.orders(created_at DESC);
+CREATE INDEX idx_invoices_user_id ON public.invoices(user_id);
+CREATE INDEX idx_invoices_order_id ON public.invoices(order_id);
+CREATE INDEX idx_invoices_status ON public.invoices(status);
+CREATE INDEX idx_payment_proofs_invoice_id ON public.payment_proofs(invoice_id);
+CREATE INDEX idx_payment_proofs_user_id ON public.payment_proofs(user_id);
+CREATE INDEX idx_payment_proofs_verified ON public.payment_proofs(verified);
+CREATE INDEX idx_notifications_user_id ON public.notifications(user_id);
+CREATE INDEX idx_notifications_is_read ON public.notifications(is_read);
+CREATE INDEX idx_audit_logs_user_id ON public.audit_logs(user_id);
+CREATE INDEX idx_audit_logs_table_name ON public.audit_logs(table_name);
 
 -- Insert sample services (will only insert if not exists)
 INSERT INTO public.services (name, description, icon, category, is_active)
