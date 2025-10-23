@@ -29,6 +29,15 @@ EXCEPTION
     WHEN duplicate_object THEN null;
 END $$;
 
+-- Create updated_at trigger function
+CREATE OR REPLACE FUNCTION public.handle_updated_at()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW.updated_at = NOW();
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
 -- Users table (extends Supabase auth.users)
 CREATE TABLE IF NOT EXISTS public.profiles (
     id UUID REFERENCES auth.users(id) PRIMARY KEY,
@@ -122,6 +131,31 @@ CREATE TABLE IF NOT EXISTS public.audit_logs (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
+-- Create triggers for updated_at
+DROP TRIGGER IF EXISTS set_updated_at_profiles ON public.profiles;
+CREATE TRIGGER set_updated_at_profiles
+    BEFORE UPDATE ON public.profiles
+    FOR EACH ROW
+    EXECUTE FUNCTION public.handle_updated_at();
+
+DROP TRIGGER IF EXISTS set_updated_at_services ON public.services;
+CREATE TRIGGER set_updated_at_services
+    BEFORE UPDATE ON public.services
+    FOR EACH ROW
+    EXECUTE FUNCTION public.handle_updated_at();
+
+DROP TRIGGER IF EXISTS set_updated_at_orders ON public.orders;
+CREATE TRIGGER set_updated_at_orders
+    BEFORE UPDATE ON public.orders
+    FOR EACH ROW
+    EXECUTE FUNCTION public.handle_updated_at();
+
+DROP TRIGGER IF EXISTS set_updated_at_invoices ON public.invoices;
+CREATE TRIGGER set_updated_at_invoices
+    BEFORE UPDATE ON public.invoices
+    FOR EACH ROW
+    EXECUTE FUNCTION public.handle_updated_at();
+
 -- Enable Row Level Security
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.services ENABLE ROW LEVEL SECURITY;
@@ -138,6 +172,7 @@ DROP POLICY IF EXISTS "Users can insert their own profile" ON public.profiles;
 DROP POLICY IF EXISTS "Admins can view all profiles" ON public.profiles;
 DROP POLICY IF EXISTS "Admins can update all profiles" ON public.profiles;
 DROP POLICY IF EXISTS "Everyone can view active services" ON public.services;
+DROP POLICY IF EXISTS "Public can view active services" ON public.services;
 DROP POLICY IF EXISTS "Admins can manage services" ON public.services;
 DROP POLICY IF EXISTS "Users can view their own orders" ON public.orders;
 DROP POLICY IF EXISTS "Users can create their own orders" ON public.orders;
@@ -182,8 +217,8 @@ CREATE POLICY "Admins can update all profiles" ON public.profiles
         )
     );
 
--- RLS Policies for services
-CREATE POLICY "Everyone can view active services" ON public.services
+-- RLS Policies for services (PUBLIC ACCESS - no login required)
+CREATE POLICY "Public can view active services" ON public.services
     FOR SELECT USING (is_active = true);
 
 CREATE POLICY "Admins can manage services" ON public.services
@@ -283,23 +318,39 @@ CREATE POLICY "System can create audit logs" ON public.audit_logs
     FOR INSERT WITH CHECK (true);
 
 -- Create indexes for better performance
+CREATE INDEX IF NOT EXISTS idx_profiles_role ON public.profiles(role);
+CREATE INDEX IF NOT EXISTS idx_services_active ON public.services(is_active);
+CREATE INDEX IF NOT EXISTS idx_services_category ON public.services(category);
 CREATE INDEX IF NOT EXISTS idx_orders_user_id ON public.orders(user_id);
+CREATE INDEX IF NOT EXISTS idx_orders_service_id ON public.orders(service_id);
 CREATE INDEX IF NOT EXISTS idx_orders_status ON public.orders(status);
 CREATE INDEX IF NOT EXISTS idx_orders_created_at ON public.orders(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_invoices_user_id ON public.invoices(user_id);
 CREATE INDEX IF NOT EXISTS idx_invoices_order_id ON public.invoices(order_id);
 CREATE INDEX IF NOT EXISTS idx_invoices_status ON public.invoices(status);
 CREATE INDEX IF NOT EXISTS idx_payment_proofs_invoice_id ON public.payment_proofs(invoice_id);
+CREATE INDEX IF NOT EXISTS idx_payment_proofs_user_id ON public.payment_proofs(user_id);
 CREATE INDEX IF NOT EXISTS idx_payment_proofs_verified ON public.payment_proofs(verified);
 CREATE INDEX IF NOT EXISTS idx_notifications_user_id ON public.notifications(user_id);
 CREATE INDEX IF NOT EXISTS idx_notifications_is_read ON public.notifications(is_read);
+CREATE INDEX IF NOT EXISTS idx_audit_logs_user_id ON public.audit_logs(user_id);
+CREATE INDEX IF NOT EXISTS idx_audit_logs_table_name ON public.audit_logs(table_name);
 
--- Insert sample services
+-- Insert sample services (will only insert if not exists)
 INSERT INTO public.services (name, description, icon, category, is_active)
 VALUES 
-    ('Jasa Tugas', 'Pengerjaan tugas kuliah dan sekolah dengan kualitas terbaik', '📝', 'Akademik', true),
-    ('Sewa Laptop', 'Rental laptop untuk kebutuhan kuliah, kerja, dan event', '💻', 'Rental', true),
-    ('Joki Makalah', 'Jasa pembuatan makalah, paper, dan karya ilmiah', '📄', 'Akademik', true),
-    ('Jasa Desain', 'Desain grafis untuk poster, banner, logo, dan presentasi', '🎨', 'Desain', true),
-    ('Laporan PKL', 'Pembuatan laporan Praktek Kerja Lapangan lengkap dan rapi', '📊', 'Akademik', true)
+    ('Jasa Tugas', 'Pengerjaan tugas kuliah dan sekolah dengan kualitas terbaik. Dikerjakan oleh tim profesional dengan hasil memuaskan.', '📝', 'Akademik', true),
+    ('Sewa Laptop', 'Rental laptop untuk kebutuhan kuliah, kerja, dan event. Spesifikasi tinggi dengan harga terjangkau.', '💻', 'Rental', true),
+    ('Joki Makalah', 'Jasa pembuatan makalah, paper, dan karya ilmiah. Dijamin original dan berkualitas tinggi.', '📄', 'Akademik', true),
+    ('Jasa Desain', 'Desain grafis untuk poster, banner, logo, dan presentasi. Hasil profesional dan kreatif.', '🎨', 'Desain', true),
+    ('Laporan PKL', 'Pembuatan laporan Praktek Kerja Lapangan lengkap dan rapi. Sesuai format institusi Anda.', '📊', 'Akademik', true)
 ON CONFLICT DO NOTHING;
+
+-- Success message
+DO $$
+BEGIN
+    RAISE NOTICE '✅ Database schema created successfully!';
+    RAISE NOTICE '📊 Tables: profiles, services, orders, invoices, payment_proofs, notifications, audit_logs';
+    RAISE NOTICE '🔒 RLS policies enabled';
+    RAISE NOTICE '🎯 Sample services inserted';
+END $$;
