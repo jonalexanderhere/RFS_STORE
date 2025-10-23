@@ -24,6 +24,7 @@ const ServiceCard = ({ service }) => {
     if (service.name.includes('Makalah')) return <FileText size={32} className="text-blue-600" />
     if (service.name.includes('Desain')) return <Palette size={32} className="text-blue-600" />
     if (service.name.includes('PKL')) return <Briefcase size={32} className="text-blue-600" />
+    if (service.name.includes('Website') || service.name.includes('Web')) return <Globe size={32} className="text-blue-600" />
     return <FileText size={32} className="text-blue-600" />
   }
 
@@ -33,6 +34,8 @@ const ServiceCard = ({ service }) => {
     if (category === 'academic' || service.category === 'Akademik') return 'Akademik'
     if (category === 'rental' || service.category === 'Rental') return 'Rental'
     if (category === 'creative' || service.category === 'Desain') return 'Desain'
+    if (category === 'design' || service.category === 'Design') return 'Desain'
+    if (category === 'website' || service.category === 'Website') return 'Website'
     return service.category || 'Layanan'
   }
 
