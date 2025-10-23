@@ -2,7 +2,12 @@
 // Using Fonnte API (you can replace with other providers like Wablas, Twilio, etc.)
 
 const FONNTE_API_URL = 'https://api.fonnte.com/send'
-const FONNTE_TOKEN = import.meta.env.VITE_FONNTE_TOKEN
+const FONNTE_TOKEN = import.meta.env.VITE_FONNTE_TOKEN || 'hakuNNT3TBPHvGqtcF2QYLXnFaUYQt66Qsg91ndi6'
+
+console.log('WhatsApp Config:', {
+  tokenExists: !!FONNTE_TOKEN,
+  apiUrl: FONNTE_API_URL
+})
 
 /**
  * Send WhatsApp message via Fonnte API
@@ -16,6 +21,8 @@ export const sendWhatsAppMessage = async (phoneNumber, message) => {
   }
 
   try {
+    console.log('Sending WhatsApp to:', phoneNumber)
+    
     const response = await fetch(FONNTE_API_URL, {
       method: 'POST',
       headers: {
@@ -29,11 +36,14 @@ export const sendWhatsAppMessage = async (phoneNumber, message) => {
       })
     })
 
-    if (!response.ok) {
-      throw new Error(`Fonnte API error: ${response.status}`)
+    const data = await response.json()
+    
+    if (!response.ok || !data.status) {
+      console.error('WhatsApp API error:', data)
+      throw new Error(data.reason || `Fonnte API error: ${response.status}`)
     }
 
-    const data = await response.json()
+    console.log('WhatsApp sent successfully to:', phoneNumber)
     return data
   } catch (error) {
     console.error('WhatsApp send error:', error)

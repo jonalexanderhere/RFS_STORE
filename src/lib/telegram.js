@@ -1,14 +1,15 @@
 // Telegram Bot Integration for RFS_STORE
 
-const TELEGRAM_BOT_TOKEN = import.meta.env.VITE_TELEGRAM_BOT_TOKEN
+const TELEGRAM_BOT_TOKEN = import.meta.env.VITE_TELEGRAM_BOT_TOKEN || '8464163003:AAHLj8X0p7dY2_mHH7y8GH02uXU--B8fXXM'
 // Support multiple admin chat IDs (comma-separated)
-const TELEGRAM_ADMIN_CHAT_IDS = (import.meta.env.VITE_TELEGRAM_ADMIN_CHAT_ID || '').split(',').filter(Boolean)
+const TELEGRAM_ADMIN_CHAT_IDS = (import.meta.env.VITE_TELEGRAM_ADMIN_CHAT_ID || '5788748857,6478150893').split(',').filter(Boolean)
 const TELEGRAM_API_URL = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}`
 
-// Default admin chat IDs if not configured
-if (TELEGRAM_ADMIN_CHAT_IDS.length === 0) {
-  TELEGRAM_ADMIN_CHAT_IDS.push('6478150893', '5788748857')
-}
+console.log('Telegram Config:', {
+  tokenExists: !!TELEGRAM_BOT_TOKEN,
+  adminChatIds: TELEGRAM_ADMIN_CHAT_IDS,
+  apiUrl: TELEGRAM_API_URL.substring(0, 50) + '...'
+})
 
 /**
  * Send message to Telegram (single chat)
@@ -17,8 +18,15 @@ if (TELEGRAM_ADMIN_CHAT_IDS.length === 0) {
  * @param {object} options - Additional options (parse_mode, reply_markup, etc.)
  */
 export const sendTelegramMessage = async (message, options = {}, chatId = null) => {
+  if (!TELEGRAM_BOT_TOKEN) {
+    console.warn('Telegram bot token not configured')
+    return null
+  }
+
   try {
     const targetChatId = chatId || TELEGRAM_ADMIN_CHAT_IDS[0]
+    
+    console.log('Sending Telegram message to:', targetChatId)
     
     const response = await fetch(`${TELEGRAM_API_URL}/sendMessage`, {
       method: 'POST',
@@ -36,13 +44,16 @@ export const sendTelegramMessage = async (message, options = {}, chatId = null) 
     const data = await response.json()
     
     if (!data.ok) {
+      console.error('Telegram API error:', data)
       throw new Error(data.description || 'Failed to send Telegram message')
     }
 
+    console.log('Telegram message sent successfully to:', targetChatId)
     return data
   } catch (error) {
     console.error('Telegram send error:', error)
-    throw error
+    // Don't throw - allow operation to continue
+    return null
   }
 }
 
