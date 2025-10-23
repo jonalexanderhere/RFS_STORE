@@ -1,38 +1,44 @@
 // WhatsApp Gateway Integration for RFS_STORE
 // Using Fonnte API (you can replace with other providers like Wablas, Twilio, etc.)
 
-const WHATSAPP_API_URL = import.meta.env.VITE_WHATSAPP_API_URL || 'https://api.fonnte.com/send'
-// Note: WhatsApp API key should be stored in Supabase Edge Function environment variables for security
+const FONNTE_API_URL = 'https://api.fonnte.com/send'
+const FONNTE_TOKEN = import.meta.env.VITE_FONNTE_TOKEN
 
 /**
- * Send WhatsApp message via Supabase Edge Function
+ * Send WhatsApp message via Fonnte API
  * @param {string} phoneNumber - Recipient phone number (format: 628xxx)
  * @param {string} message - Message to send
  */
 export const sendWhatsAppMessage = async (phoneNumber, message) => {
+  if (!FONNTE_TOKEN) {
+    console.warn('Fonnte token not configured, skipping WhatsApp notification')
+    return null
+  }
+
   try {
-    // Call Supabase Edge Function to send WhatsApp message
-    // This keeps the API key secure on the server side
-    const response = await fetch('/functions/v1/send-whatsapp', {
+    const response = await fetch(FONNTE_API_URL, {
       method: 'POST',
       headers: {
+        'Authorization': FONNTE_TOKEN,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        phone: phoneNumber,
-        message: message
+        target: phoneNumber,
+        message: message,
+        countryCode: '62'
       })
     })
 
     if (!response.ok) {
-      throw new Error('Failed to send WhatsApp message')
+      throw new Error(`Fonnte API error: ${response.status}`)
     }
 
     const data = await response.json()
     return data
   } catch (error) {
     console.error('WhatsApp send error:', error)
-    throw error
+    // Don't throw - just log and continue (notifications are non-critical)
+    return null
   }
 }
 
@@ -301,7 +307,7 @@ RFS_STORE x InspiraProject
  * @param {string} message - Message to send
  */
 export const sendAdminWhatsAppNotification = async (message) => {
-  const adminPhone = '628123456789' // Replace with actual admin phone number
+  const adminPhone = import.meta.env.VITE_FONNTE_SENDER || '6281234567890'
   return sendWhatsAppMessage(adminPhone, message)
 }
 

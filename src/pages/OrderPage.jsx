@@ -4,6 +4,8 @@ import { motion } from 'framer-motion'
 import { Send, ArrowLeft, FileText, Calendar, Phone, Mail, User, CheckCircle } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import { createOrder, supabase } from '../lib/supabase'
+import { notifyNewOrder } from '../lib/telegram'
+import { sendOrderConfirmation } from '../lib/whatsapp'
 import toast from 'react-hot-toast'
 
 const OrderPage = () => {
@@ -32,19 +34,34 @@ const OrderPage = () => {
     }
   }, [user])
 
+  // Hardcoded services as fallback (same as Services.jsx)
+  const fallbackServices = {
+    '1': { id: '1', name: 'Jasa Tugas', description: 'Pengerjaan tugas kuliah dan sekolah dengan kualitas terbaik', icon: '📝', category: 'Akademik' },
+    '2': { id: '2', name: 'Sewa Laptop', description: 'Rental laptop untuk kebutuhan kuliah, kerja, dan event', icon: '💻', category: 'Rental' },
+    '3': { id: '3', name: 'Joki Makalah', description: 'Jasa pembuatan makalah, paper, dan karya ilmiah', icon: '📄', category: 'Akademik' },
+    '4': { id: '4', name: 'Jasa Desain', description: 'Desain grafis untuk poster, banner, logo, dan presentasi', icon: '🎨', category: 'Desain' },
+    '5': { id: '5', name: 'Laporan PKL', description: 'Pembuatan laporan Praktek Kerja Lapangan lengkap dan rapi', icon: '📊', category: 'Akademik' }
+  }
+
   const loadService = async () => {
     try {
       const { data, error } = await supabase
         .from('services')
         .select('*')
         .eq('id', serviceId)
-        .single()
       
       if (error) throw error
-      setService(data)
+      
+      if (data && data.length > 0) {
+        setService(data[0])
+      } else {
+        // Use fallback service if not found in database
+        setService(fallbackServices[serviceId] || fallbackServices['1'])
+      }
     } catch (error) {
-      toast.error('Gagal memuat layanan: ' + error.message)
-      navigate('/services')
+      console.log('Using fallback service:', error.message)
+      // Use fallback service
+      setService(fallbackServices[serviceId] || fallbackServices['1'])
     } finally {
       setLoading(false)
     }
@@ -81,7 +98,33 @@ const OrderPage = () => {
         status: 'pending'
       }
 
-      await createOrder(orderData)
+      const createdOrder = await createOrder(orderData)
+      
+      // Send notifications (async, don't block user flow)
+      try {
+        // Get full order data with relations for notifications
+        const { data: fullOrder } = await supabase
+          .from('orders')
+          .select(`
+            *,
+            user:profiles!user_id(*),
+            service:services(*)
+          `)
+          .eq('id', createdOrder.id)
+          .single()
+        
+        // Send Telegram notification to admin
+        notifyNewOrder(fullOrder).catch(err => 
+          console.log('Telegram notification failed:', err.message)
+        )
+        
+        // Send WhatsApp confirmation to customer
+        sendOrderConfirmation(fullOrder).catch(err => 
+          console.log('WhatsApp notification failed:', err.message)
+        )
+      } catch (notifError) {
+        console.log('Notification error:', notifError.message)
+      }
       
       toast.success('Pesanan berhasil dibuat! Admin akan segera membuat invoice.')
       navigate('/my-orders')
