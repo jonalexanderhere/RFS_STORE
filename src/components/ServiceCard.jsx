@@ -1,6 +1,6 @@
 import { motion } from 'framer-motion'
 import { useNavigate } from 'react-router-dom'
-import { ArrowRight, BookOpen, Laptop, FileText, Palette, Briefcase } from 'lucide-react'
+import { ArrowRight, BookOpen, Laptop, FileText, Palette, Briefcase, Globe } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import toast from 'react-hot-toast'
 
