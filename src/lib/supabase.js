@@ -80,13 +80,30 @@ export const getServices = async () => {
   return data
 }
 
+// Generate unique order number
+const generateOrderNumber = async () => {
+  const today = new Date()
+  const dateStr = today.toISOString().slice(0, 10).replace(/-/g, '')
+  
+  // Get today's orders count
+  const { count } = await supabase
+    .from('orders')
+    .select('*', { count: 'exact', head: true })
+    .gte('created_at', new Date(today.setHours(0, 0, 0, 0)).toISOString())
+  
+  const orderNum = String((count || 0) + 1).padStart(3, '0')
+  return `ORD-${dateStr}-${orderNum}`
+}
+
 export const createOrder = async (orderData) => {
   const user = await getCurrentUser()
+  const orderNumber = await generateOrderNumber()
   
   const { data, error } = await supabase
     .from('orders')
     .insert({
       user_id: user.id,
+      order_number: orderNumber,
       ...orderData
     })
     .select()
@@ -234,10 +251,30 @@ export const getAllInvoices = async () => {
   return data
 }
 
+// Generate unique invoice number
+const generateInvoiceNumber = async () => {
+  const today = new Date()
+  const dateStr = today.toISOString().slice(0, 10).replace(/-/g, '')
+  
+  // Get today's invoices count
+  const { count } = await supabase
+    .from('invoices')
+    .select('*', { count: 'exact', head: true })
+    .gte('created_at', new Date(today.setHours(0, 0, 0, 0)).toISOString())
+  
+  const invoiceNum = String((count || 0) + 1).padStart(3, '0')
+  return `INV-${dateStr}-${invoiceNum}`
+}
+
 export const createInvoice = async (invoiceData) => {
+  const invoiceNumber = await generateInvoiceNumber()
+  
   const { data, error } = await supabase
     .from('invoices')
-    .insert(invoiceData)
+    .insert({
+      invoice_number: invoiceNumber,
+      ...invoiceData
+    })
     .select()
     .single()
   
