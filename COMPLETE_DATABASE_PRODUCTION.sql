@@ -130,6 +130,7 @@ CREATE TABLE public.invoices (
     invoice_number TEXT NOT NULL UNIQUE,
     order_id UUID NOT NULL REFERENCES public.orders(id) ON DELETE CASCADE,
     amount DECIMAL(10,2) NOT NULL,
+    description TEXT,
     status invoice_status DEFAULT 'unpaid',
     payment_method TEXT,
     payment_details JSONB,
