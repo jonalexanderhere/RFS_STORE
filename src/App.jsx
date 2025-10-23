@@ -18,6 +18,7 @@ import AdminOrders from './pages/admin/AdminOrders'
 import AdminInvoices from './pages/admin/AdminInvoices'
 import AdminPayments from './pages/admin/AdminPayments'
 import AdminReports from './pages/admin/AdminReports'
+import AdminOrderDetail from './pages/admin/AdminOrderDetail'
 
 // Components
 import Layout from './components/Layout'

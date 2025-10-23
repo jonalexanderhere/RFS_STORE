@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
-import { Package, Edit, Eye, Trash2, Search, Filter, RefreshCw, CheckCircle, Clock, XCircle } from 'lucide-react'
+import { Package, Edit, Eye, Trash2, Search, Filter, RefreshCw, CheckCircle, Clock, XCircle, Send } from 'lucide-react'
+import { Link } from 'react-router-dom'
 import { getAllOrders, updateOrderStatus } from '../../lib/supabase'
 import { notifyOrderStatus } from '../../lib/telegram'
 import { sendOrderStatusUpdate } from '../../lib/whatsapp'
@@ -228,6 +229,13 @@ const AdminOrders = () => {
                       </div>
 
                       <div className="flex md:flex-col gap-2">
+                        <Link
+                          to={`/admin/orders/${order.id}`}
+                          className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg font-semibold transition-colors text-sm"
+                        >
+                          <Send size={16} />
+                          Kirim Hasil
+                        </Link>
                         <button
                           onClick={() => openUpdateModal(order)}
                           className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-semibold transition-colors text-sm"
