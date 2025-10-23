@@ -49,7 +49,7 @@ const Services = () => {
     }
   ]
 
-  const [services, setServices] = useState(defaultServices)
+  const [services, setServices] = useState([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -60,11 +60,16 @@ const Services = () => {
     try {
       const data = await getServices()
       if (data && data.length > 0) {
+        // Use database services
         setServices(data)
+      } else {
+        // Use hardcoded fallback if database empty
+        setServices(defaultServices)
       }
     } catch (error) {
-      // Silently use default services if database not ready
-      console.log('Using default services')
+      // Use default services if database connection fails
+      console.log('Using fallback services:', error.message)
+      setServices(defaultServices)
     } finally {
       setLoading(false)
     }
