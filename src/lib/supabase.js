@@ -34,21 +34,22 @@ export const getUserProfile = async (userId) => {
   return data
 }
 
-export const signUp = async (email, password, fullName, phone) => {
+export const signUp = async (email, password, fullName, phone, telegramId = null) => {
   const { data, error } = await supabase.auth.signUp({
     email,
     password,
     options: {
       data: {
         full_name: fullName,
-        phone: phone
+        phone: phone,
+        telegram_id: telegramId
       }
     }
   })
   
   if (error) throw error
   
-  // Profile will be auto-created by database trigger
+  // Profile will be auto-created by database trigger with telegram_id
   // No need to manually insert into profiles table
   
   return data

@@ -13,7 +13,8 @@ const Register = () => {
     email: '',
     phone: '',
     password: '',
-    confirmPassword: ''
+    confirmPassword: '',
+    telegram_id: '' // Optional
   })
 
   const handleChange = (e) => {
@@ -39,7 +40,13 @@ const Register = () => {
     setLoading(true)
 
     try {
-      await signUp(formData.email, formData.password, formData.fullName, formData.phone)
+      await signUp(
+        formData.email, 
+        formData.password, 
+        formData.fullName, 
+        formData.phone,
+        formData.telegram_id || null // Pass telegram_id if provided
+      )
       toast.success('Registrasi berhasil! Silakan login.')
       navigate('/login')
     } catch (error) {

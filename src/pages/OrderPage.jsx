@@ -4,8 +4,7 @@ import { motion } from 'framer-motion'
 import { Send, ArrowLeft, FileText, Calendar, Phone, Mail, User, CheckCircle } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import { createOrder, supabase } from '../lib/supabase'
-import { notifyNewOrder } from '../lib/telegram'
-import { sendOrderConfirmation } from '../lib/whatsapp'
+import { sendAdminNotification, sendCustomerNotification, formatNotificationMessage } from '../lib/notification'
 import toast from 'react-hot-toast'
 
 const OrderPage = () => {
@@ -113,15 +112,32 @@ const OrderPage = () => {
           .eq('id', createdOrder.id)
           .single()
         
-        // Send Telegram notification to admin
-        notifyNewOrder(fullOrder).catch(err => 
-          console.log('Telegram notification failed:', err.message)
-        )
-        
-        // Send WhatsApp confirmation to customer
-        sendOrderConfirmation(fullOrder).catch(err => 
-          console.log('WhatsApp notification failed:', err.message)
-        )
+        if (fullOrder) {
+          // Format notification data
+          const notifData = {
+            order_number: fullOrder.order_number,
+            customer_name: fullOrder.user?.full_name || 'N/A',
+            customer_phone: fullOrder.user?.phone || 'N/A',
+            service_name: fullOrder.service?.name || 'N/A',
+            description: fullOrder.description,
+            timestamp: new Date(fullOrder.created_at).toLocaleString('id-ID')
+          }
+
+          // Send to admin (Telegram)
+          const adminMessages = formatNotificationMessage('new_order', notifData)
+          sendAdminNotification(adminMessages.telegram).catch(err => 
+            console.log('Admin notification failed:', err.message)
+          )
+          
+          // Send to customer (Telegram if available, else WhatsApp)
+          const customerMessages = formatNotificationMessage('order_confirmation', notifData)
+          sendCustomerNotification(
+            fullOrder.user, 
+            customerMessages.telegram
+          ).catch(err => 
+            console.log('Customer notification failed:', err.message)
+          )
+        }
       } catch (notifError) {
         console.log('Notification error:', notifError.message)
       }

@@ -2,10 +2,13 @@
 // Using Fonnte API (you can replace with other providers like Wablas, Twilio, etc.)
 
 const FONNTE_API_URL = 'https://api.fonnte.com/send'
-const FONNTE_TOKEN = import.meta.env.VITE_FONNTE_TOKEN || 'hakuNNT3TBPHvGqtcF2QYLXnFaUYQt66Qsg91ndi6'
+// Try device token first, fallback to account token
+const FONNTE_DEVICE_TOKEN = import.meta.env.VITE_FONNTE_DEVICE_TOKEN || 'zCvpmi9fjxwhyKxTqt22'
+const FONNTE_ACCOUNT_TOKEN = import.meta.env.VITE_FONNTE_TOKEN || 'hakuNNT3TBPHvGqtcF2QYLXnFaUYQt66Qsg91ndi6'
 
 console.log('WhatsApp Config:', {
-  tokenExists: !!FONNTE_TOKEN,
+  deviceTokenExists: !!FONNTE_DEVICE_TOKEN,
+  accountTokenExists: !!FONNTE_ACCOUNT_TOKEN,
   apiUrl: FONNTE_API_URL
 })
 
@@ -14,19 +17,22 @@ console.log('WhatsApp Config:', {
  * @param {string} phoneNumber - Recipient phone number (format: 628xxx)
  * @param {string} message - Message to send
  */
-export const sendWhatsAppMessage = async (phoneNumber, message) => {
-  if (!FONNTE_TOKEN) {
+export const sendWhatsAppMessage = async (phoneNumber, message, useDeviceToken = true) => {
+  // Choose token: device token first (for personal messages), then account token
+  const token = useDeviceToken ? FONNTE_DEVICE_TOKEN : FONNTE_ACCOUNT_TOKEN
+  
+  if (!token) {
     console.warn('Fonnte token not configured, skipping WhatsApp notification')
     return null
   }
 
   try {
-    console.log('Sending WhatsApp to:', phoneNumber)
+    console.log('Sending WhatsApp to:', phoneNumber, 'using', useDeviceToken ? 'device' : 'account', 'token')
     
     const response = await fetch(FONNTE_API_URL, {
       method: 'POST',
       headers: {
-        'Authorization': FONNTE_TOKEN,
+        'Authorization': token,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
@@ -40,6 +46,13 @@ export const sendWhatsAppMessage = async (phoneNumber, message) => {
     
     if (!response.ok || !data.status) {
       console.error('WhatsApp API error:', data)
+      
+      // If device token fails, try account token
+      if (useDeviceToken && FONNTE_ACCOUNT_TOKEN) {
+        console.log('Retrying with account token...')
+        return sendWhatsAppMessage(phoneNumber, message, false)
+      }
+      
       throw new Error(data.reason || `Fonnte API error: ${response.status}`)
     }
 
