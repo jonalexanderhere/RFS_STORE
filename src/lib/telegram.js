@@ -5,6 +5,12 @@ const TELEGRAM_BOT_TOKEN = import.meta.env.VITE_TELEGRAM_BOT_TOKEN || '846416300
 const TELEGRAM_ADMIN_CHAT_IDS = (import.meta.env.VITE_TELEGRAM_ADMIN_CHAT_ID || '5788748857,6478150893').split(',').filter(Boolean)
 const TELEGRAM_API_URL = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}`
 
+// Admin WhatsApp numbers (for reference/fallback)
+export const ADMIN_WHATSAPP = {
+  admin1: import.meta.env.VITE_ADMIN_WHATSAPP_1 || '6282181183590',
+  admin2: import.meta.env.VITE_ADMIN_WHATSAPP_2 || '6282176466707'
+}
+
 console.log('Telegram Config:', {
   tokenExists: !!TELEGRAM_BOT_TOKEN,
   adminChatIds: TELEGRAM_ADMIN_CHAT_IDS,

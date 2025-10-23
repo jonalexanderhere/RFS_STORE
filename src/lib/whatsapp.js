@@ -6,9 +6,16 @@ const FONNTE_API_URL = 'https://api.fonnte.com/send'
 const FONNTE_DEVICE_TOKEN = import.meta.env.VITE_FONNTE_DEVICE_TOKEN || 'zCvpmi9fjxwhyKxTqt22'
 const FONNTE_ACCOUNT_TOKEN = import.meta.env.VITE_FONNTE_TOKEN || 'hakuNNT3TBPHvGqtcF2QYLXnFaUYQt66Qsg91ndi6'
 
+// Admin WhatsApp numbers
+export const ADMIN_WHATSAPP = {
+  admin1: import.meta.env.VITE_ADMIN_WHATSAPP_1 || '6282181183590',
+  admin2: import.meta.env.VITE_ADMIN_WHATSAPP_2 || '6282176466707'
+}
+
 console.log('WhatsApp Config:', {
   deviceTokenExists: !!FONNTE_DEVICE_TOKEN,
   accountTokenExists: !!FONNTE_ACCOUNT_TOKEN,
+  adminNumbers: ADMIN_WHATSAPP,
   apiUrl: FONNTE_API_URL
 })
 
