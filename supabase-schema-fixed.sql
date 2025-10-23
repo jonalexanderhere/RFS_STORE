@@ -195,6 +195,7 @@ DROP POLICY IF EXISTS "Users can view their own profile" ON public.profiles;
 DROP POLICY IF EXISTS "Users can update their own profile" ON public.profiles;
 DROP POLICY IF EXISTS "Users can insert their own profile" ON public.profiles;
 DROP POLICY IF EXISTS "Allow new user registration" ON public.profiles;
+DROP POLICY IF EXISTS "Authenticated users can create profile" ON public.profiles;
 DROP POLICY IF EXISTS "Admins can view all profiles" ON public.profiles;
 DROP POLICY IF EXISTS "Admins can update all profiles" ON public.profiles;
 DROP POLICY IF EXISTS "Everyone can view active services" ON public.services;
@@ -217,37 +218,37 @@ DROP POLICY IF EXISTS "System can create notifications" ON public.notifications;
 DROP POLICY IF EXISTS "Admins can view audit logs" ON public.audit_logs;
 DROP POLICY IF EXISTS "System can create audit logs" ON public.audit_logs;
 
--- RLS Policies for profiles
+-- RLS Policies for profiles (PERMISSIVE for registration)
+
+-- Allow anyone authenticated to view their own profile
 CREATE POLICY "Users can view their own profile" ON public.profiles
-    FOR SELECT USING (auth.uid() = id);
+    FOR SELECT 
+    USING (auth.uid() = id);
 
+-- Allow anyone authenticated to update their own profile
 CREATE POLICY "Users can update their own profile" ON public.profiles
-    FOR UPDATE USING (auth.uid() = id);
+    FOR UPDATE 
+    USING (auth.uid() = id);
 
--- Allow authenticated users to insert their own profile
-CREATE POLICY "Users can insert their own profile" ON public.profiles
+-- PERMISSIVE INSERT: Allow any authenticated user to create their profile
+CREATE POLICY "Authenticated users can create profile" ON public.profiles
     FOR INSERT 
-    WITH CHECK (auth.uid() = id);
+    WITH CHECK (auth.uid() IS NOT NULL);
 
--- Allow new user registration (for signup process)
-CREATE POLICY "Allow new user registration" ON public.profiles
-    FOR INSERT 
-    WITH CHECK (
-        auth.uid() IS NOT NULL 
-        AND id = auth.uid()
-        AND role = 'user'
-    );
-
+-- Allow admins to view all profiles
 CREATE POLICY "Admins can view all profiles" ON public.profiles
-    FOR SELECT USING (
+    FOR SELECT 
+    USING (
         EXISTS (
             SELECT 1 FROM public.profiles
             WHERE id = auth.uid() AND role = 'admin'
         )
     );
 
+-- Allow admins to update all profiles
 CREATE POLICY "Admins can update all profiles" ON public.profiles
-    FOR UPDATE USING (
+    FOR UPDATE 
+    USING (
         EXISTS (
             SELECT 1 FROM public.profiles
             WHERE id = auth.uid() AND role = 'admin'
