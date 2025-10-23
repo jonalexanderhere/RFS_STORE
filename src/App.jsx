@@ -103,6 +103,11 @@ function App() {
               <Layout><AdminReports /></Layout>
             </AdminRoute>
           } />
+          <Route path="/admin/orders/:orderId" element={
+            <AdminRoute>
+              <Layout><AdminOrderDetail /></Layout>
+            </AdminRoute>
+          } />
         </Routes>
       </Router>
     </AuthProvider>
