@@ -4,11 +4,30 @@
 -- Enable UUID extension
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
--- Create enum types
-CREATE TYPE order_status AS ENUM ('pending', 'processing', 'completed', 'cancelled');
-CREATE TYPE invoice_status AS ENUM ('unpaid', 'pending', 'paid', 'cancelled');
-CREATE TYPE payment_method AS ENUM ('transfer', 'qris', 'ewallet');
-CREATE TYPE user_role AS ENUM ('user', 'staff', 'admin');
+-- Create enum types (with error handling)
+DO $$ BEGIN
+    CREATE TYPE order_status AS ENUM ('pending', 'processing', 'completed', 'cancelled');
+EXCEPTION
+    WHEN duplicate_object THEN null;
+END $$;
+
+DO $$ BEGIN
+    CREATE TYPE invoice_status AS ENUM ('unpaid', 'pending', 'paid', 'cancelled');
+EXCEPTION
+    WHEN duplicate_object THEN null;
+END $$;
+
+DO $$ BEGIN
+    CREATE TYPE payment_method AS ENUM ('transfer', 'qris', 'ewallet');
+EXCEPTION
+    WHEN duplicate_object THEN null;
+END $$;
+
+DO $$ BEGIN
+    CREATE TYPE user_role AS ENUM ('user', 'staff', 'admin');
+EXCEPTION
+    WHEN duplicate_object THEN null;
+END $$;
 
 -- Users table (extends Supabase auth.users)
 CREATE TABLE IF NOT EXISTS public.profiles (
@@ -54,21 +73,21 @@ CREATE TABLE IF NOT EXISTS public.invoices (
     invoice_number TEXT UNIQUE NOT NULL,
     order_id UUID REFERENCES public.orders(id) NOT NULL,
     user_id UUID REFERENCES public.profiles(id) NOT NULL,
-    total_amount DECIMAL(12,2) NOT NULL,
+    amount DECIMAL(12,2) NOT NULL,
     status invoice_status DEFAULT 'unpaid',
-    due_date DATE,
-    notes TEXT,
+    due_date TIMESTAMP WITH TIME ZONE,
+    paid_at TIMESTAMP WITH TIME ZONE,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
--- Payment proofs table
+-- Payment Proofs table
 CREATE TABLE IF NOT EXISTS public.payment_proofs (
     id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
     invoice_id UUID REFERENCES public.invoices(id) NOT NULL,
     user_id UUID REFERENCES public.profiles(id) NOT NULL,
-    amount DECIMAL(12,2) NOT NULL,
     payment_method payment_method NOT NULL,
+    amount DECIMAL(12,2) NOT NULL,
     proof_url TEXT NOT NULL,
     notes TEXT,
     verified BOOLEAN DEFAULT false,
@@ -84,11 +103,12 @@ CREATE TABLE IF NOT EXISTS public.notifications (
     title TEXT NOT NULL,
     message TEXT NOT NULL,
     type TEXT,
-    read BOOLEAN DEFAULT false,
+    is_read BOOLEAN DEFAULT false,
+    metadata JSONB,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
--- Audit logs table
+-- Audit Logs table
 CREATE TABLE IF NOT EXISTS public.audit_logs (
     id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
     user_id UUID REFERENCES public.profiles(id),
@@ -97,17 +117,10 @@ CREATE TABLE IF NOT EXISTS public.audit_logs (
     record_id UUID,
     old_data JSONB,
     new_data JSONB,
+    ip_address TEXT,
+    user_agent TEXT,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
-
--- Indexes
-CREATE INDEX IF NOT EXISTS idx_orders_user_id ON public.orders(user_id);
-CREATE INDEX IF NOT EXISTS idx_orders_status ON public.orders(status);
-CREATE INDEX IF NOT EXISTS idx_invoices_user_id ON public.invoices(user_id);
-CREATE INDEX IF NOT EXISTS idx_invoices_status ON public.invoices(status);
-CREATE INDEX IF NOT EXISTS idx_invoices_order_id ON public.invoices(order_id);
-CREATE INDEX IF NOT EXISTS idx_notifications_user_id ON public.notifications(user_id);
-CREATE INDEX IF NOT EXISTS idx_notifications_read ON public.notifications(read);
 
 -- Enable Row Level Security
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
@@ -118,32 +131,63 @@ ALTER TABLE public.payment_proofs ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.notifications ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.audit_logs ENABLE ROW LEVEL SECURITY;
 
--- Drop existing policies if any (to avoid conflicts)
-DROP POLICY IF EXISTS "Public profiles are viewable by everyone" ON public.profiles;
-DROP POLICY IF EXISTS "Users can update own profile" ON public.profiles;
-DROP POLICY IF EXISTS "Users can insert own profile on signup" ON public.profiles;
+-- Drop existing policies if they exist
+DROP POLICY IF EXISTS "Users can view their own profile" ON public.profiles;
+DROP POLICY IF EXISTS "Users can update their own profile" ON public.profiles;
+DROP POLICY IF EXISTS "Users can insert their own profile" ON public.profiles;
+DROP POLICY IF EXISTS "Admins can view all profiles" ON public.profiles;
+DROP POLICY IF EXISTS "Admins can update all profiles" ON public.profiles;
+DROP POLICY IF EXISTS "Everyone can view active services" ON public.services;
+DROP POLICY IF EXISTS "Admins can manage services" ON public.services;
+DROP POLICY IF EXISTS "Users can view their own orders" ON public.orders;
+DROP POLICY IF EXISTS "Users can create their own orders" ON public.orders;
+DROP POLICY IF EXISTS "Admins can view all orders" ON public.orders;
+DROP POLICY IF EXISTS "Admins can update all orders" ON public.orders;
+DROP POLICY IF EXISTS "Users can view their own invoices" ON public.invoices;
+DROP POLICY IF EXISTS "Admins can view all invoices" ON public.invoices;
+DROP POLICY IF EXISTS "Admins can manage invoices" ON public.invoices;
+DROP POLICY IF EXISTS "Users can view their own payment proofs" ON public.payment_proofs;
+DROP POLICY IF EXISTS "Users can create their own payment proofs" ON public.payment_proofs;
+DROP POLICY IF EXISTS "Admins can view all payment proofs" ON public.payment_proofs;
+DROP POLICY IF EXISTS "Admins can verify payment proofs" ON public.payment_proofs;
+DROP POLICY IF EXISTS "Users can view their own notifications" ON public.notifications;
+DROP POLICY IF EXISTS "Users can update their own notifications" ON public.notifications;
+DROP POLICY IF EXISTS "System can create notifications" ON public.notifications;
+DROP POLICY IF EXISTS "Admins can view audit logs" ON public.audit_logs;
+DROP POLICY IF EXISTS "System can create audit logs" ON public.audit_logs;
 
 -- RLS Policies for profiles
-CREATE POLICY "Public profiles are viewable by everyone"
-    ON public.profiles FOR SELECT
-    USING (true);
+CREATE POLICY "Users can view their own profile" ON public.profiles
+    FOR SELECT USING (auth.uid() = id);
 
-CREATE POLICY "Users can insert own profile on signup"
-    ON public.profiles FOR INSERT
-    WITH CHECK (auth.uid() = id);
+CREATE POLICY "Users can update their own profile" ON public.profiles
+    FOR UPDATE USING (auth.uid() = id);
 
-CREATE POLICY "Users can update own profile"
-    ON public.profiles FOR UPDATE
-    USING (auth.uid() = id);
+CREATE POLICY "Users can insert their own profile" ON public.profiles
+    FOR INSERT WITH CHECK (auth.uid() = id);
+
+CREATE POLICY "Admins can view all profiles" ON public.profiles
+    FOR SELECT USING (
+        EXISTS (
+            SELECT 1 FROM public.profiles
+            WHERE id = auth.uid() AND role = 'admin'
+        )
+    );
+
+CREATE POLICY "Admins can update all profiles" ON public.profiles
+    FOR UPDATE USING (
+        EXISTS (
+            SELECT 1 FROM public.profiles
+            WHERE id = auth.uid() AND role = 'admin'
+        )
+    );
 
 -- RLS Policies for services
-CREATE POLICY "Services are viewable by everyone"
-    ON public.services FOR SELECT
-    USING (is_active = true);
+CREATE POLICY "Everyone can view active services" ON public.services
+    FOR SELECT USING (is_active = true);
 
-CREATE POLICY "Only admins can manage services"
-    ON public.services FOR ALL
-    USING (
+CREATE POLICY "Admins can manage services" ON public.services
+    FOR ALL USING (
         EXISTS (
             SELECT 1 FROM public.profiles
             WHERE id = auth.uid() AND role = 'admin'
@@ -151,180 +195,112 @@ CREATE POLICY "Only admins can manage services"
     );
 
 -- RLS Policies for orders
-CREATE POLICY "Users can view own orders"
-    ON public.orders FOR SELECT
-    USING (auth.uid() = user_id OR 
-           EXISTS (
-               SELECT 1 FROM public.profiles
-               WHERE id = auth.uid() AND role IN ('admin', 'staff')
-           ));
+CREATE POLICY "Users can view their own orders" ON public.orders
+    FOR SELECT USING (auth.uid() = user_id);
 
-CREATE POLICY "Users can create own orders"
-    ON public.orders FOR INSERT
-    WITH CHECK (auth.uid() = user_id);
+CREATE POLICY "Users can create their own orders" ON public.orders
+    FOR INSERT WITH CHECK (auth.uid() = user_id);
 
-CREATE POLICY "Admins can update orders"
-    ON public.orders FOR UPDATE
-    USING (
-        EXISTS (
-            SELECT 1 FROM public.profiles
-            WHERE id = auth.uid() AND role IN ('admin', 'staff')
-        )
-    );
-
--- RLS Policies for invoices
-CREATE POLICY "Users can view own invoices"
-    ON public.invoices FOR SELECT
-    USING (auth.uid() = user_id OR 
-           EXISTS (
-               SELECT 1 FROM public.profiles
-               WHERE id = auth.uid() AND role IN ('admin', 'staff')
-           ));
-
-CREATE POLICY "Admins can manage invoices"
-    ON public.invoices FOR ALL
-    USING (
-        EXISTS (
-            SELECT 1 FROM public.profiles
-            WHERE id = auth.uid() AND role IN ('admin', 'staff')
-        )
-    );
-
--- RLS Policies for payment proofs
-CREATE POLICY "Users can view own payment proofs"
-    ON public.payment_proofs FOR SELECT
-    USING (auth.uid() = user_id OR 
-           EXISTS (
-               SELECT 1 FROM public.profiles
-               WHERE id = auth.uid() AND role IN ('admin', 'staff')
-           ));
-
-CREATE POLICY "Users can upload payment proofs"
-    ON public.payment_proofs FOR INSERT
-    WITH CHECK (auth.uid() = user_id);
-
-CREATE POLICY "Admins can manage payment proofs"
-    ON public.payment_proofs FOR ALL
-    USING (
-        EXISTS (
-            SELECT 1 FROM public.profiles
-            WHERE id = auth.uid() AND role IN ('admin', 'staff')
-        )
-    );
-
--- RLS Policies for notifications
-CREATE POLICY "Users can view own notifications"
-    ON public.notifications FOR SELECT
-    USING (auth.uid() = user_id);
-
-CREATE POLICY "Users can update own notifications"
-    ON public.notifications FOR UPDATE
-    USING (auth.uid() = user_id);
-
--- RLS Policies for audit logs
-CREATE POLICY "Only admins can view audit logs"
-    ON public.audit_logs FOR SELECT
-    USING (
+CREATE POLICY "Admins can view all orders" ON public.orders
+    FOR SELECT USING (
         EXISTS (
             SELECT 1 FROM public.profiles
             WHERE id = auth.uid() AND role = 'admin'
         )
     );
 
--- Functions for automatic timestamps
-CREATE OR REPLACE FUNCTION update_updated_at_column()
-RETURNS TRIGGER AS $$
-BEGIN
-    NEW.updated_at = NOW();
-    RETURN NEW;
-END;
-$$ LANGUAGE plpgsql;
+CREATE POLICY "Admins can update all orders" ON public.orders
+    FOR UPDATE USING (
+        EXISTS (
+            SELECT 1 FROM public.profiles
+            WHERE id = auth.uid() AND role = 'admin'
+        )
+    );
 
--- Triggers for updated_at
-DROP TRIGGER IF EXISTS update_profiles_updated_at ON public.profiles;
-CREATE TRIGGER update_profiles_updated_at BEFORE UPDATE ON public.profiles
-    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+-- RLS Policies for invoices
+CREATE POLICY "Users can view their own invoices" ON public.invoices
+    FOR SELECT USING (auth.uid() = user_id);
 
-DROP TRIGGER IF EXISTS update_services_updated_at ON public.services;
-CREATE TRIGGER update_services_updated_at BEFORE UPDATE ON public.services
-    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+CREATE POLICY "Admins can view all invoices" ON public.invoices
+    FOR SELECT USING (
+        EXISTS (
+            SELECT 1 FROM public.profiles
+            WHERE id = auth.uid() AND role = 'admin'
+        )
+    );
 
-DROP TRIGGER IF EXISTS update_orders_updated_at ON public.orders;
-CREATE TRIGGER update_orders_updated_at BEFORE UPDATE ON public.orders
-    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+CREATE POLICY "Admins can manage invoices" ON public.invoices
+    FOR ALL USING (
+        EXISTS (
+            SELECT 1 FROM public.profiles
+            WHERE id = auth.uid() AND role = 'admin'
+        )
+    );
 
-DROP TRIGGER IF EXISTS update_invoices_updated_at ON public.invoices;
-CREATE TRIGGER update_invoices_updated_at BEFORE UPDATE ON public.invoices
-    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+-- RLS Policies for payment_proofs
+CREATE POLICY "Users can view their own payment proofs" ON public.payment_proofs
+    FOR SELECT USING (auth.uid() = user_id);
 
--- Function to generate order number
-CREATE OR REPLACE FUNCTION generate_order_number()
-RETURNS TEXT AS $$
-DECLARE
-    new_number TEXT;
-    year_month TEXT;
-    sequence_num INTEGER;
-BEGIN
-    year_month := TO_CHAR(NOW(), 'YYYYMM');
-    
-    SELECT COALESCE(MAX(CAST(SUBSTRING(order_number FROM 13) AS INTEGER)), 0) + 1
-    INTO sequence_num
-    FROM public.orders
-    WHERE order_number LIKE 'ORD-RFS-' || year_month || '%';
-    
-    new_number := 'ORD-RFS-' || year_month || LPAD(sequence_num::TEXT, 4, '0');
-    
-    RETURN new_number;
-END;
-$$ LANGUAGE plpgsql;
+CREATE POLICY "Users can create their own payment proofs" ON public.payment_proofs
+    FOR INSERT WITH CHECK (auth.uid() = user_id);
 
--- Function to generate invoice number
-CREATE OR REPLACE FUNCTION generate_invoice_number()
-RETURNS TEXT AS $$
-DECLARE
-    new_number TEXT;
-    year_month TEXT;
-    sequence_num INTEGER;
-BEGIN
-    year_month := TO_CHAR(NOW(), 'YYYYMM');
-    
-    SELECT COALESCE(MAX(CAST(SUBSTRING(invoice_number FROM 13) AS INTEGER)), 0) + 1
-    INTO sequence_num
-    FROM public.invoices
-    WHERE invoice_number LIKE 'INV-RFS-' || year_month || '%';
-    
-    new_number := 'INV-RFS-' || year_month || LPAD(sequence_num::TEXT, 4, '0');
-    
-    RETURN new_number;
-END;
-$$ LANGUAGE plpgsql;
+CREATE POLICY "Admins can view all payment proofs" ON public.payment_proofs
+    FOR SELECT USING (
+        EXISTS (
+            SELECT 1 FROM public.profiles
+            WHERE id = auth.uid() AND role = 'admin'
+        )
+    );
 
--- Function to create profile on user signup
-CREATE OR REPLACE FUNCTION public.handle_new_user() 
-RETURNS trigger AS $$
-BEGIN
-  INSERT INTO public.profiles (id, full_name, phone)
-  VALUES (
-    new.id,
-    COALESCE(new.raw_user_meta_data->>'full_name', 'User'),
-    COALESCE(new.raw_user_meta_data->>'phone', '')
-  );
-  RETURN new;
-END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+CREATE POLICY "Admins can verify payment proofs" ON public.payment_proofs
+    FOR UPDATE USING (
+        EXISTS (
+            SELECT 1 FROM public.profiles
+            WHERE id = auth.uid() AND role = 'admin'
+        )
+    );
 
--- Trigger to automatically create profile on signup
-DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
-CREATE TRIGGER on_auth_user_created
-  AFTER INSERT ON auth.users
-  FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
+-- RLS Policies for notifications
+CREATE POLICY "Users can view their own notifications" ON public.notifications
+    FOR SELECT USING (auth.uid() = user_id);
+
+CREATE POLICY "Users can update their own notifications" ON public.notifications
+    FOR UPDATE USING (auth.uid() = user_id);
+
+CREATE POLICY "System can create notifications" ON public.notifications
+    FOR INSERT WITH CHECK (true);
+
+-- RLS Policies for audit_logs
+CREATE POLICY "Admins can view audit logs" ON public.audit_logs
+    FOR SELECT USING (
+        EXISTS (
+            SELECT 1 FROM public.profiles
+            WHERE id = auth.uid() AND role = 'admin'
+        )
+    );
+
+CREATE POLICY "System can create audit logs" ON public.audit_logs
+    FOR INSERT WITH CHECK (true);
+
+-- Create indexes for better performance
+CREATE INDEX IF NOT EXISTS idx_orders_user_id ON public.orders(user_id);
+CREATE INDEX IF NOT EXISTS idx_orders_status ON public.orders(status);
+CREATE INDEX IF NOT EXISTS idx_orders_created_at ON public.orders(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_invoices_user_id ON public.invoices(user_id);
+CREATE INDEX IF NOT EXISTS idx_invoices_order_id ON public.invoices(order_id);
+CREATE INDEX IF NOT EXISTS idx_invoices_status ON public.invoices(status);
+CREATE INDEX IF NOT EXISTS idx_payment_proofs_invoice_id ON public.payment_proofs(invoice_id);
+CREATE INDEX IF NOT EXISTS idx_payment_proofs_verified ON public.payment_proofs(verified);
+CREATE INDEX IF NOT EXISTS idx_notifications_user_id ON public.notifications(user_id);
+CREATE INDEX IF NOT EXISTS idx_notifications_is_read ON public.notifications(is_read);
 
 -- Insert sample services
-INSERT INTO public.services (name, description, icon, category, is_active) VALUES
-('Jasa Pembuatan Tugas Kuliah', 'Kami membantu menyelesaikan tugas kuliah dengan kualitas terbaik', 'file-text', 'academic', true),
-('Rental Laptop', 'Sewa laptop untuk kebutuhan kuliah atau kerja', 'laptop', 'rental', true),
-('Jasa Pembuatan Makalah', 'Pembuatan makalah dengan referensi lengkap', 'book-open', 'academic', true),
-('Jasa Desain Grafis', 'Desain poster, banner, dan materi presentasi', 'palette', 'creative', true),
-('Jasa Pembuatan Laporan PKL', 'Bantuan menyusun laporan PKL yang sempurna', 'briefcase', 'academic', true)
+INSERT INTO public.services (name, description, icon, category, is_active)
+VALUES 
+    ('Konsultasi Akademik', 'Konsultasi dan bimbingan untuk proyek akademik Anda', '📚', 'Akademik', true),
+    ('Penulisan Artikel', 'Jasa penulisan artikel ilmiah dan populer', '✍️', 'Penulisan', true),
+    ('Desain Grafis', 'Desain poster, infografis, dan presentasi', '🎨', 'Desain', true),
+    ('Analisis Data', 'Analisis data statistik dan visualisasi', '📊', 'Analitik', true),
+    ('Pembuatan Website', 'Pengembangan website profesional dan responsif', '💻', 'Teknologi', true),
+    ('Terjemahan Dokumen', 'Jasa terjemahan dokumen berbagai bahasa', '🌐', 'Bahasa', true)
 ON CONFLICT DO NOTHING;
-
