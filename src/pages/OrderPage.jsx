@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { Send, ArrowLeft } from 'lucide-react'
+import { Send, ArrowLeft, FileText, Calendar, Phone, Mail, User, CheckCircle } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import { createOrder, supabase } from '../lib/supabase'
 import toast from 'react-hot-toast'
@@ -16,12 +16,21 @@ const OrderPage = () => {
   const [formData, setFormData] = useState({
     description: '',
     deadline: '',
-    additionalInfo: ''
+    contactPhone: '',
+    contactEmail: user?.email || '',
+    additionalInfo: '',
+    urgency: 'normal'
   })
 
   useEffect(() => {
     loadService()
   }, [serviceId])
+
+  useEffect(() => {
+    if (user?.email) {
+      setFormData(prev => ({ ...prev, contactEmail: user.email }))
+    }
+  }, [user])
 
   const loadService = async () => {
     try {
@@ -64,6 +73,9 @@ const OrderPage = () => {
         description: formData.description,
         details: {
           deadline: formData.deadline,
+          urgency: formData.urgency,
+          contactPhone: formData.contactPhone,
+          contactEmail: formData.contactEmail,
           additionalInfo: formData.additionalInfo
         },
         status: 'pending'
@@ -83,42 +95,59 @@ const OrderPage = () => {
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white"></div>
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen py-12">
-      <div className="container mx-auto px-4 max-w-3xl">
+    <div className="min-h-screen py-8 bg-gray-50">
+      <div className="container mx-auto px-4 max-w-4xl">
         <motion.div
           initial={{ opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.6 }}
         >
+          {/* Back Button */}
           <button
             onClick={() => navigate('/services')}
-            className="flex items-center gap-2 text-white hover:text-blue-300 mb-6 transition-colors"
+            className="flex items-center gap-2 text-gray-700 hover:text-blue-600 mb-6 transition-colors font-medium"
           >
             <ArrowLeft size={20} />
             Kembali ke Layanan
           </button>
 
-          <div className="glass-effect rounded-3xl p-8 md:p-12">
-            <div className="text-center mb-8">
-              <div className="text-6xl mb-4">{service?.icon}</div>
-              <h1 className="text-3xl font-bold text-white mb-2">
-                {service?.name}
-              </h1>
-              <p className="text-gray-200">
-                {service?.description}
-              </p>
+          {/* Service Header */}
+          <div className="glass-effect rounded-2xl p-6 mb-6">
+            <div className="flex items-center gap-4">
+              <div className="text-5xl">{service?.icon}</div>
+              <div className="flex-1">
+                <h1 className="text-2xl font-bold text-gray-900 mb-1">
+                  Pesan {service?.name}
+                </h1>
+                <p className="text-sm text-gray-600">
+                  {service?.description}
+                </p>
+              </div>
+              <div className="hidden md:block">
+                <span className="px-3 py-1 bg-blue-50 text-blue-700 rounded-full text-xs font-semibold">
+                  {service?.category}
+                </span>
+              </div>
             </div>
+          </div>
 
+          {/* Order Form */}
+          <div className="glass-effect rounded-2xl p-6 md:p-8">
+
+            <h2 className="text-xl font-bold text-gray-900 mb-6">Detail Pesanan</h2>
+            
             <form onSubmit={handleSubmit} className="space-y-6">
+              {/* Description */}
               <div>
-                <label className="block text-white mb-2 font-semibold">
-                  Deskripsi Pesanan <span className="text-red-400">*</span>
+                <label className="flex items-center gap-2 text-gray-900 mb-2 font-semibold text-sm">
+                  <FileText size={18} className="text-blue-600" />
+                  Deskripsi Pesanan <span className="text-red-500">*</span>
                 </label>
                 <textarea
                   name="description"
@@ -126,26 +155,87 @@ const OrderPage = () => {
                   onChange={handleChange}
                   required
                   rows={5}
-                  className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-blue-400 transition-colors resize-none"
+                  className="w-full px-4 py-3 bg-white border border-gray-300 rounded-lg text-gray-900 placeholder-gray-400 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-colors resize-none"
                   placeholder="Jelaskan detail pesanan Anda (misal: jenis tugas, mata kuliah, spesifikasi, dll)"
                 />
+                <p className="text-xs text-gray-500 mt-1">Jelaskan sedetail mungkin kebutuhan Anda</p>
               </div>
 
-              <div>
-                <label className="block text-white mb-2 font-semibold">
-                  Deadline (Opsional)
-                </label>
-                <input
-                  type="datetime-local"
-                  name="deadline"
-                  value={formData.deadline}
-                  onChange={handleChange}
-                  className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-blue-400 transition-colors"
-                />
+              {/* Urgency & Deadline Grid */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* Urgency */}
+                <div>
+                  <label className="flex items-center gap-2 text-gray-900 mb-2 font-semibold text-sm">
+                    <CheckCircle size={18} className="text-blue-600" />
+                    Tingkat Urgensi
+                  </label>
+                  <select
+                    name="urgency"
+                    value={formData.urgency}
+                    onChange={handleChange}
+                    className="w-full px-4 py-3 bg-white border border-gray-300 rounded-lg text-gray-900 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-colors"
+                  >
+                    <option value="normal">Normal</option>
+                    <option value="urgent">Urgent (1-2 hari)</option>
+                    <option value="very_urgent">Very Urgent (< 24 jam)</option>
+                  </select>
+                </div>
+
+                {/* Deadline */}
+                <div>
+                  <label className="flex items-center gap-2 text-gray-900 mb-2 font-semibold text-sm">
+                    <Calendar size={18} className="text-blue-600" />
+                    Deadline
+                  </label>
+                  <input
+                    type="datetime-local"
+                    name="deadline"
+                    value={formData.deadline}
+                    onChange={handleChange}
+                    className="w-full px-4 py-3 bg-white border border-gray-300 rounded-lg text-gray-900 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-colors"
+                  />
+                </div>
               </div>
 
+              {/* Contact Info Grid */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* Phone */}
+                <div>
+                  <label className="flex items-center gap-2 text-gray-900 mb-2 font-semibold text-sm">
+                    <Phone size={18} className="text-blue-600" />
+                    No. WhatsApp
+                  </label>
+                  <input
+                    type="tel"
+                    name="contactPhone"
+                    value={formData.contactPhone}
+                    onChange={handleChange}
+                    placeholder="08123456789"
+                    className="w-full px-4 py-3 bg-white border border-gray-300 rounded-lg text-gray-900 placeholder-gray-400 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-colors"
+                  />
+                </div>
+
+                {/* Email */}
+                <div>
+                  <label className="flex items-center gap-2 text-gray-900 mb-2 font-semibold text-sm">
+                    <Mail size={18} className="text-blue-600" />
+                    Email
+                  </label>
+                  <input
+                    type="email"
+                    name="contactEmail"
+                    value={formData.contactEmail}
+                    onChange={handleChange}
+                    placeholder="email@example.com"
+                    className="w-full px-4 py-3 bg-white border border-gray-300 rounded-lg text-gray-900 placeholder-gray-400 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-colors"
+                  />
+                </div>
+              </div>
+
+              {/* Additional Info */}
               <div>
-                <label className="block text-white mb-2 font-semibold">
+                <label className="flex items-center gap-2 text-gray-900 mb-2 font-semibold text-sm">
+                  <FileText size={18} className="text-blue-600" />
                   Informasi Tambahan (Opsional)
                 </label>
                 <textarea
@@ -153,31 +243,33 @@ const OrderPage = () => {
                   value={formData.additionalInfo}
                   onChange={handleChange}
                   rows={3}
-                  className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-blue-400 transition-colors resize-none"
+                  className="w-full px-4 py-3 bg-white border border-gray-300 rounded-lg text-gray-900 placeholder-gray-400 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-colors resize-none"
                   placeholder="Tambahkan informasi lain yang perlu kami ketahui"
                 />
               </div>
 
-              <div className="bg-blue-500/20 border border-blue-400/30 rounded-lg p-4">
-                <p className="text-blue-300 text-sm">
-                  <strong>Catatan:</strong> Setelah pesanan dibuat, admin kami akan meninjau
+              {/* Info Box */}
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                <p className="text-blue-900 text-sm leading-relaxed">
+                  <strong className="font-semibold">Catatan:</strong> Setelah pesanan dibuat, admin kami akan meninjau
                   kebutuhan Anda dan membuat invoice dengan harga yang sesuai. Invoice akan
-                  dikirimkan melalui Telegram dan WhatsApp.
+                  dikirimkan melalui email, Telegram, dan WhatsApp.
                 </p>
               </div>
 
+              {/* Submit Button */}
               <motion.button
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.98 }}
+                whileHover={{ scale: 1.01 }}
+                whileTap={{ scale: 0.99 }}
                 type="submit"
                 disabled={submitting}
-                className="w-full py-4 bg-gradient-to-r from-blue-500 to-purple-500 text-white rounded-lg font-semibold text-lg hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-semibold text-base shadow-md hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
               >
                 {submitting ? (
-                  <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-white"></div>
+                  <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
                 ) : (
                   <>
-                    <Send size={20} />
+                    <Send size={18} />
                     Kirim Pesanan
                   </>
                 )}
