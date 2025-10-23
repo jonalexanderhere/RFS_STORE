@@ -1,0 +1,135 @@
+═══════════════════════════════════════════════════════════════════
+🚨 ERROR: Missing Supabase environment variables
+═══════════════════════════════════════════════════════════════════
+
+ERROR LOCATION: https://rfs-store.vercel.app/
+
+PENYEBAB:
+Environment variables BELUM di-set di Vercel!
+
+═══════════════════════════════════════════════════════════════════
+✅ SOLUSI - IKUTI 3 LANGKAH INI (5 MENIT)
+═══════════════════════════════════════════════════════════════════
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+LANGKAH 1: BUKA VERCEL SETTINGS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+KLIK LINK INI:
+https://vercel.com/jonalexanderhere/rfs-store/settings/environment-variables
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+LANGKAH 2: TAMBAH 2 VARIABLES
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+▼ VARIABLE 1:
+Click tombol "Add New"
+
+Name (copy ini):
+VITE_SUPABASE_URL
+
+Value (copy ini):
+https://lzuqfckzboeqwtlqjfgm.supabase.co
+
+Environments (centang SEMUA 3):
+☑ Production
+☑ Preview  
+☑ Development
+
+Click "Save"
+
+────────────────────────────────────────────────────────────────
+
+▼ VARIABLE 2:
+Click tombol "Add New" lagi
+
+Name (copy ini):
+VITE_SUPABASE_ANON_KEY
+
+Value (copy ini):
+eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imx6dXFmY2t6Ym9lcXd0bHFqZmdtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjEyMTQ0OTYsImV4cCI6MjA3Njc5MDQ5Nn0.Zjy_gk4c2dgXNW_EUOY-J4Vk3-VCxaL8W8D70WgQmjk
+
+Environments (centang SEMUA 3):
+☑ Production
+☑ Preview
+☑ Development
+
+Click "Save"
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+LANGKAH 3: REDEPLOY
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+1. Buka: https://vercel.com/jonalexanderhere/rfs-store
+
+2. Click deployment paling atas (yang terbaru)
+
+3. Click tombol "..." (three dots) di kanan atas
+
+4. Click "Redeploy"
+
+5. Confirm "Redeploy"
+
+6. TUNGGU 2-3 MENIT sampai status berubah jadi "Ready"
+
+
+═══════════════════════════════════════════════════════════════════
+🎯 SELESAI!
+═══════════════════════════════════════════════════════════════════
+
+Setelah redeploy selesai:
+
+1. Buka: https://rfs-store.vercel.app/
+
+2. Hard refresh: Ctrl + Shift + R
+
+3. Website akan muncul sempurna! ✅
+
+
+═══════════════════════════════════════════════════════════════════
+📌 CHECKLIST
+═══════════════════════════════════════════════════════════════════
+
+[ ] VITE_SUPABASE_URL ditambah
+[ ] VITE_SUPABASE_ANON_KEY ditambah
+[ ] Kedua variable centang Production + Preview + Development
+[ ] Redeploy sudah di-click
+[ ] Status deployment "Ready"
+[ ] Website dibuka dan di-refresh
+
+
+═══════════════════════════════════════════════════════════════════
+❓ TROUBLESHOOTING
+═══════════════════════════════════════════════════════════════════
+
+Masih error setelah redeploy?
+
+1. Clear cache browser: Ctrl + Shift + Delete
+2. Hard refresh: Ctrl + Shift + R  
+3. Coba incognito mode: Ctrl + Shift + N
+4. Verify variables sudah saved di Vercel settings
+
+
+═══════════════════════════════════════════════════════════════════
+🔗 QUICK LINKS
+═══════════════════════════════════════════════════════════════════
+
+Vercel Env Settings:
+https://vercel.com/jonalexanderhere/rfs-store/settings/environment-variables
+
+Vercel Deployments:
+https://vercel.com/jonalexanderhere/rfs-store
+
+Your Live Website:
+https://rfs-store.vercel.app/
+
+
+═══════════════════════════════════════════════════════════════════
+
+PENTING: Error ini HANYA bisa di-fix dengan menambah environment 
+variables di Vercel dan redeploy. File .env local sudah benar!
+
+═══════════════════════════════════════════════════════════════════
+
