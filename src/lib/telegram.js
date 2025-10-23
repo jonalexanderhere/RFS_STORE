@@ -1,23 +1,32 @@
 // Telegram Bot Integration for RFS_STORE
 
 const TELEGRAM_BOT_TOKEN = import.meta.env.VITE_TELEGRAM_BOT_TOKEN
-const TELEGRAM_CHAT_ID = import.meta.env.VITE_TELEGRAM_ADMIN_CHAT_ID || import.meta.env.VITE_TELEGRAM_CHAT_ID
+// Support multiple admin chat IDs (comma-separated)
+const TELEGRAM_ADMIN_CHAT_IDS = (import.meta.env.VITE_TELEGRAM_ADMIN_CHAT_ID || '').split(',').filter(Boolean)
 const TELEGRAM_API_URL = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}`
 
+// Default admin chat IDs if not configured
+if (TELEGRAM_ADMIN_CHAT_IDS.length === 0) {
+  TELEGRAM_ADMIN_CHAT_IDS.push('6478150893', '5788748857')
+}
+
 /**
- * Send message to Telegram
+ * Send message to Telegram (single chat)
+ * @param {string} chatId - Chat ID to send to
  * @param {string} message - Message to send
  * @param {object} options - Additional options (parse_mode, reply_markup, etc.)
  */
-export const sendTelegramMessage = async (message, options = {}) => {
+export const sendTelegramMessage = async (message, options = {}, chatId = null) => {
   try {
+    const targetChatId = chatId || TELEGRAM_ADMIN_CHAT_IDS[0]
+    
     const response = await fetch(`${TELEGRAM_API_URL}/sendMessage`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        chat_id: TELEGRAM_CHAT_ID,
+        chat_id: targetChatId,
         text: message,
         parse_mode: 'HTML',
         ...options
@@ -35,6 +44,27 @@ export const sendTelegramMessage = async (message, options = {}) => {
     console.error('Telegram send error:', error)
     throw error
   }
+}
+
+/**
+ * Send message to all admins
+ * @param {string} message - Message to send
+ * @param {object} options - Additional options (parse_mode, reply_markup, etc.)
+ */
+export const sendTelegramToAllAdmins = async (message, options = {}) => {
+  const results = []
+  
+  for (const chatId of TELEGRAM_ADMIN_CHAT_IDS) {
+    try {
+      const result = await sendTelegramMessage(message, options, chatId)
+      results.push({ chatId, success: true, result })
+    } catch (error) {
+      console.error(`Failed to send to ${chatId}:`, error)
+      results.push({ chatId, success: false, error: error.message })
+    }
+  }
+  
+  return results
 }
 
 /**
@@ -67,7 +97,8 @@ Segera buat invoice untuk pesanan ini!
     ]
   }
 
-  return sendTelegramMessage(message, { reply_markup: keyboard })
+  // Send to all admins
+  return sendTelegramToAllAdmins(message, { reply_markup: keyboard })
 }
 
 /**
@@ -109,7 +140,8 @@ Invoice telah dikirim ke pelanggan via WhatsApp & Telegram.
     ]
   }
 
-  return sendTelegramMessage(message, { reply_markup: keyboard })
+  // Send to all admins
+  return sendTelegramToAllAdmins(message, { reply_markup: keyboard })
 }
 
 /**
@@ -150,7 +182,8 @@ Segera verifikasi pembayaran ini!
     ]
   }
 
-  return sendTelegramMessage(message, { reply_markup: keyboard })
+  // Send to all admins
+  return sendTelegramToAllAdmins(message, { reply_markup: keyboard })
 }
 
 /**
@@ -193,7 +226,8 @@ Status: <b>UNPAID</b> ❌
 Pelanggan diminta untuk mengupload ulang bukti pembayaran yang valid.
     `.trim()
 
-  return sendTelegramMessage(message)
+  // Send to all admins
+  return sendTelegramToAllAdmins(message)
 }
 
 /**
@@ -222,7 +256,8 @@ ${order.admin_notes ? `📝 Catatan Admin:\n${order.admin_notes}` : ''}
 ⏰ Waktu Update: ${new Date().toLocaleString('id-ID')}
   `.trim()
 
-  return sendTelegramMessage(message)
+  // Send to all admins
+  return sendTelegramToAllAdmins(message)
 }
 
 /**
