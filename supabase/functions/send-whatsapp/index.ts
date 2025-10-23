@@ -2,7 +2,6 @@
 // Deploy: supabase functions deploy send-whatsapp
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -16,50 +15,71 @@ serve(async (req) => {
   }
 
   try {
-    const { phone, message } = await req.json()
+    const { phone, message, media_url } = await req.json()
 
     if (!phone || !message) {
       throw new Error('Phone number and message are required')
     }
 
-    // Get WhatsApp API credentials from environment
-    const WHATSAPP_API_KEY = Deno.env.get('WHATSAPP_API_KEY')
-    const WHATSAPP_API_URL = Deno.env.get('WHATSAPP_API_URL') || 'https://api.fonnte.com/send'
+    console.log('Sending WhatsApp to:', phone)
 
-    if (!WHATSAPP_API_KEY) {
-      throw new Error('WhatsApp API key not configured')
+    // Get WhatsApp API credentials from environment
+    const FONNTE_TOKEN = Deno.env.get('FONNTE_TOKEN')
+    const WHATSAPP_API_URL = 'https://api.fonnte.com/send'
+
+    if (!FONNTE_TOKEN) {
+      throw new Error('WhatsApp API token not configured')
     }
 
-    // Send message via Fonnte (or your preferred WhatsApp gateway)
+    // Prepare request body
+    const requestBody: any = {
+      target: phone,
+      message: message,
+      countryCode: '62'
+    }
+
+    // Add media if provided
+    if (media_url) {
+      requestBody.url = media_url
+      requestBody.filename = 'file.pdf' // Default filename
+    }
+
+    // Send message via Fonnte
     const response = await fetch(WHATSAPP_API_URL, {
       method: 'POST',
       headers: {
-        'Authorization': WHATSAPP_API_KEY,
+        'Authorization': FONNTE_TOKEN,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({
-        target: phone,
-        message: message,
-        countryCode: '62'
-      })
+      body: JSON.stringify(requestBody)
     })
 
     const data = await response.json()
 
-    if (!response.ok) {
+    console.log('Fonnte response:', data)
+
+    if (!response.ok || !data.status) {
       throw new Error(data.reason || 'Failed to send WhatsApp message')
     }
 
     return new Response(
-      JSON.stringify({ success: true, data }),
+      JSON.stringify({ 
+        success: true, 
+        data,
+        message: 'WhatsApp message sent successfully'
+      }),
       { 
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         status: 200 
       }
     )
   } catch (error) {
+    console.error('WhatsApp error:', error)
     return new Response(
-      JSON.stringify({ error: error.message }),
+      JSON.stringify({ 
+        success: false,
+        error: error.message 
+      }),
       { 
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         status: 400 
@@ -67,4 +87,3 @@ serve(async (req) => {
     )
   }
 })
-
