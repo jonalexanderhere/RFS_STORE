@@ -177,7 +177,7 @@ const OrderPage = () => {
                   >
                     <option value="normal">Normal</option>
                     <option value="urgent">Urgent (1-2 hari)</option>
-                    <option value="very_urgent">Very Urgent (< 24 jam)</option>
+                    <option value="very_urgent">Very Urgent (kurang dari 24 jam)</option>
                   </select>
                 </div>
 
