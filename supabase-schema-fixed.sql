@@ -297,10 +297,9 @@ CREATE INDEX IF NOT EXISTS idx_notifications_is_read ON public.notifications(is_
 -- Insert sample services
 INSERT INTO public.services (name, description, icon, category, is_active)
 VALUES 
-    ('Konsultasi Akademik', 'Konsultasi dan bimbingan untuk proyek akademik Anda', '📚', 'Akademik', true),
-    ('Penulisan Artikel', 'Jasa penulisan artikel ilmiah dan populer', '✍️', 'Penulisan', true),
-    ('Desain Grafis', 'Desain poster, infografis, dan presentasi', '🎨', 'Desain', true),
-    ('Analisis Data', 'Analisis data statistik dan visualisasi', '📊', 'Analitik', true),
-    ('Pembuatan Website', 'Pengembangan website profesional dan responsif', '💻', 'Teknologi', true),
-    ('Terjemahan Dokumen', 'Jasa terjemahan dokumen berbagai bahasa', '🌐', 'Bahasa', true)
+    ('Jasa Tugas', 'Pengerjaan tugas kuliah dan sekolah dengan kualitas terbaik', '📝', 'Akademik', true),
+    ('Sewa Laptop', 'Rental laptop untuk kebutuhan kuliah, kerja, dan event', '💻', 'Rental', true),
+    ('Joki Makalah', 'Jasa pembuatan makalah, paper, dan karya ilmiah', '📄', 'Akademik', true),
+    ('Jasa Desain', 'Desain grafis untuk poster, banner, logo, dan presentasi', '🎨', 'Desain', true),
+    ('Laporan PKL', 'Pembuatan laporan Praktek Kerja Lapangan lengkap dan rapi', '📊', 'Akademik', true)
 ON CONFLICT DO NOTHING;
