@@ -28,66 +28,66 @@ const Header = () => {
 
   return (
     <header className="glass-effect sticky top-0 z-50 border-b border-gray-200">
-      <nav className="container mx-auto px-4 py-4">
+      <nav className="container mx-auto px-4 py-3">
         <div className="flex items-center justify-between">
           {/* Logo */}
-          <Link to="/" className="flex items-center space-x-3">
+          <Link to="/" className="flex items-center space-x-2">
             <motion.div
               whileHover={{ scale: 1.02 }}
               whileTap={{ scale: 0.98 }}
               className="flex items-center gap-2"
             >
-              <div className="w-10 h-10 bg-gradient-to-br from-blue-600 to-blue-800 rounded-lg flex items-center justify-center">
-                <span className="text-white font-bold text-xl">R</span>
+              <div className="w-8 h-8 bg-gradient-to-br from-blue-600 to-blue-800 rounded-lg flex items-center justify-center">
+                <span className="text-white font-bold text-base">R</span>
               </div>
               <div>
-                <span className="text-xl font-bold text-gray-900 tracking-tight">RFS STORE</span>
-                <span className="text-xs text-gray-500 block -mt-1">Professional Services</span>
+                <span className="text-base font-bold text-gray-900 tracking-tight">RFS STORE</span>
+                <span className="text-[10px] text-gray-500 block -mt-0.5">Professional Services</span>
               </div>
             </motion.div>
           </Link>
 
           {/* Desktop Menu */}
-          <div className="hidden md:flex items-center space-x-8">
-            <Link to="/" className="text-gray-700 hover:text-blue-600 transition-colors font-medium">
+          <div className="hidden md:flex items-center space-x-6">
+            <Link to="/" className="text-sm text-gray-700 hover:text-blue-600 transition-colors font-medium">
               Beranda
             </Link>
-            <Link to="/services" className="text-gray-700 hover:text-blue-600 transition-colors font-medium">
+            <Link to="/services" className="text-sm text-gray-700 hover:text-blue-600 transition-colors font-medium">
               Layanan
             </Link>
             
             {user ? (
               <>
                 {isAdmin && (
-                  <Link to="/admin" className="text-gray-700 hover:text-blue-600 transition-colors flex items-center gap-2 font-medium">
-                    <LayoutDashboard size={18} />
+                  <Link to="/admin" className="text-sm text-gray-700 hover:text-blue-600 transition-colors flex items-center gap-1.5 font-medium">
+                    <LayoutDashboard size={16} />
                     Admin
                   </Link>
                 )}
-                <Link to="/dashboard" className="text-gray-700 hover:text-blue-600 transition-colors flex items-center gap-2 font-medium">
-                  <User size={18} />
+                <Link to="/dashboard" className="text-sm text-gray-700 hover:text-blue-600 transition-colors flex items-center gap-1.5 font-medium">
+                  <User size={16} />
                   Dashboard
                 </Link>
-                <Link to="/my-orders" className="text-gray-700 hover:text-blue-600 transition-colors flex items-center gap-2 font-medium">
-                  <ShoppingBag size={18} />
+                <Link to="/my-orders" className="text-sm text-gray-700 hover:text-blue-600 transition-colors flex items-center gap-1.5 font-medium">
+                  <ShoppingBag size={16} />
                   Pesanan Saya
                 </Link>
                 <button
                   onClick={handleLogout}
-                  className="flex items-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors font-medium"
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors font-medium"
                 >
-                  <LogOut size={18} />
+                  <LogOut size={16} />
                   Logout
                 </button>
               </>
             ) : (
               <>
-                <Link to="/login" className="text-gray-700 hover:text-blue-600 transition-colors font-medium">
+                <Link to="/login" className="text-sm text-gray-700 hover:text-blue-600 transition-colors font-medium">
                   Login
                 </Link>
                 <Link
                   to="/register"
-                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors font-medium"
+                  className="px-4 py-1.5 text-sm bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors font-medium"
                 >
                   Daftar
                 </Link>
