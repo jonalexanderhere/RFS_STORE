@@ -38,6 +38,34 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+-- Create function to handle order status changes
+CREATE OR REPLACE FUNCTION public.handle_order_status_change()
+RETURNS TRIGGER AS $$
+BEGIN
+    -- Set completed_at when status changes to 'completed'
+    IF NEW.status = 'completed' AND OLD.status != 'completed' THEN
+        NEW.completed_at = NOW();
+    END IF;
+    
+    -- Set cancelled_at when status changes to 'cancelled'
+    IF NEW.status = 'cancelled' AND OLD.status != 'cancelled' THEN
+        NEW.cancelled_at = NOW();
+    END IF;
+    
+    -- Clear completed_at if status changes away from 'completed'
+    IF NEW.status != 'completed' AND OLD.status = 'completed' THEN
+        NEW.completed_at = NULL;
+    END IF;
+    
+    -- Clear cancelled_at if status changes away from 'cancelled'
+    IF NEW.status != 'cancelled' AND OLD.status = 'cancelled' THEN
+        NEW.cancelled_at = NULL;
+    END IF;
+    
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
 -- Create function to auto-create profile on user signup
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS TRIGGER AS $$
@@ -90,6 +118,8 @@ CREATE TABLE IF NOT EXISTS public.orders (
     details JSONB,
     status order_status DEFAULT 'pending',
     admin_notes TEXT,
+    completed_at TIMESTAMP WITH TIME ZONE,
+    cancelled_at TIMESTAMP WITH TIME ZONE,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
@@ -174,6 +204,12 @@ CREATE TRIGGER set_updated_at_orders
     BEFORE UPDATE ON public.orders
     FOR EACH ROW
     EXECUTE FUNCTION public.handle_updated_at();
+
+DROP TRIGGER IF EXISTS handle_order_status_on_update ON public.orders;
+CREATE TRIGGER handle_order_status_on_update
+    BEFORE UPDATE ON public.orders
+    FOR EACH ROW
+    EXECUTE FUNCTION public.handle_order_status_change();
 
 DROP TRIGGER IF EXISTS set_updated_at_invoices ON public.invoices;
 CREATE TRIGGER set_updated_at_invoices
@@ -367,6 +403,38 @@ BEGIN
     ) THEN
         ALTER TABLE public.notifications ADD COLUMN is_read BOOLEAN DEFAULT false;
     END IF;
+    
+    -- Add completed_at to orders if not exists
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_schema = 'public' 
+        AND table_name = 'orders' 
+        AND column_name = 'completed_at'
+    ) THEN
+        ALTER TABLE public.orders ADD COLUMN completed_at TIMESTAMP WITH TIME ZONE;
+        RAISE NOTICE 'Added completed_at column to orders table';
+    END IF;
+    
+    -- Add cancelled_at to orders if not exists
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_schema = 'public' 
+        AND table_name = 'orders' 
+        AND column_name = 'cancelled_at'
+    ) THEN
+        ALTER TABLE public.orders ADD COLUMN cancelled_at TIMESTAMP WITH TIME ZONE;
+        RAISE NOTICE 'Added cancelled_at column to orders table';
+    END IF;
+    
+    -- Update existing completed orders with completed_at timestamp
+    UPDATE public.orders 
+    SET completed_at = updated_at 
+    WHERE status = 'completed' AND completed_at IS NULL;
+    
+    -- Update existing cancelled orders with cancelled_at timestamp
+    UPDATE public.orders 
+    SET cancelled_at = updated_at 
+    WHERE status = 'cancelled' AND cancelled_at IS NULL;
 END $$;
 
 -- Drop existing indexes if they exist
@@ -377,6 +445,8 @@ DROP INDEX IF EXISTS idx_orders_user_id;
 DROP INDEX IF EXISTS idx_orders_service_id;
 DROP INDEX IF EXISTS idx_orders_status;
 DROP INDEX IF EXISTS idx_orders_created_at;
+DROP INDEX IF EXISTS idx_orders_completed_at;
+DROP INDEX IF EXISTS idx_orders_cancelled_at;
 DROP INDEX IF EXISTS idx_invoices_user_id;
 DROP INDEX IF EXISTS idx_invoices_order_id;
 DROP INDEX IF EXISTS idx_invoices_status;
@@ -396,6 +466,8 @@ CREATE INDEX idx_orders_user_id ON public.orders(user_id);
 CREATE INDEX idx_orders_service_id ON public.orders(service_id);
 CREATE INDEX idx_orders_status ON public.orders(status);
 CREATE INDEX idx_orders_created_at ON public.orders(created_at DESC);
+CREATE INDEX idx_orders_completed_at ON public.orders(completed_at DESC);
+CREATE INDEX idx_orders_cancelled_at ON public.orders(cancelled_at DESC);
 CREATE INDEX idx_invoices_user_id ON public.invoices(user_id);
 CREATE INDEX idx_invoices_order_id ON public.invoices(order_id);
 CREATE INDEX idx_invoices_status ON public.invoices(status);
@@ -417,6 +489,123 @@ VALUES
     ('Laporan PKL', 'Pembuatan laporan Praktek Kerja Lapangan lengkap dan rapi. Sesuai format institusi Anda.', '📊', 'Akademik', true)
 ON CONFLICT DO NOTHING;
 
+-- ============================================
+-- HELPER FUNCTIONS FOR ADMIN MANAGEMENT
+-- ============================================
+
+-- Function to promote user to admin by email
+CREATE OR REPLACE FUNCTION public.promote_user_to_admin(user_email TEXT)
+RETURNS TEXT AS $$
+DECLARE
+    v_user_id UUID;
+    v_updated_count INTEGER;
+BEGIN
+    -- Get user ID from email
+    SELECT id INTO v_user_id
+    FROM auth.users
+    WHERE email = user_email;
+    
+    IF v_user_id IS NULL THEN
+        RETURN '❌ User not found with email: ' || user_email;
+    END IF;
+    
+    -- Update profile to admin
+    UPDATE public.profiles
+    SET role = 'admin'
+    WHERE id = v_user_id;
+    
+    GET DIAGNOSTICS v_updated_count = ROW_COUNT;
+    
+    IF v_updated_count > 0 THEN
+        RETURN '✅ User ' || user_email || ' promoted to admin successfully!';
+    ELSE
+        RETURN '⚠️  Profile not found for user: ' || user_email;
+    END IF;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Function to demote admin to user
+CREATE OR REPLACE FUNCTION public.demote_admin_to_user(user_email TEXT)
+RETURNS TEXT AS $$
+DECLARE
+    v_user_id UUID;
+BEGIN
+    SELECT id INTO v_user_id
+    FROM auth.users
+    WHERE email = user_email;
+    
+    IF v_user_id IS NULL THEN
+        RETURN '❌ User not found';
+    END IF;
+    
+    UPDATE public.profiles
+    SET role = 'user'
+    WHERE id = v_user_id;
+    
+    RETURN '✅ User demoted to regular user';
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Function to get all admins
+CREATE OR REPLACE FUNCTION public.get_all_admins()
+RETURNS TABLE (
+    user_id UUID,
+    email TEXT,
+    full_name TEXT,
+    phone TEXT,
+    whatsapp TEXT,
+    telegram_id TEXT,
+    created_at TIMESTAMP WITH TIME ZONE
+) AS $$
+BEGIN
+    RETURN QUERY
+    SELECT 
+        p.id,
+        u.email,
+        p.full_name,
+        p.phone,
+        p.whatsapp,
+        p.telegram_id,
+        p.created_at
+    FROM public.profiles p
+    JOIN auth.users u ON p.id = u.id
+    WHERE p.role = 'admin'
+    ORDER BY p.created_at;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Function to update admin contact info
+CREATE OR REPLACE FUNCTION public.update_admin_contact(
+    p_email TEXT,
+    p_full_name TEXT DEFAULT NULL,
+    p_phone TEXT DEFAULT NULL,
+    p_whatsapp TEXT DEFAULT NULL,
+    p_telegram_id TEXT DEFAULT NULL
+)
+RETURNS TEXT AS $$
+DECLARE
+    v_user_id UUID;
+BEGIN
+    SELECT id INTO v_user_id
+    FROM auth.users
+    WHERE email = p_email;
+    
+    IF v_user_id IS NULL THEN
+        RETURN '❌ User not found';
+    END IF;
+    
+    UPDATE public.profiles
+    SET 
+        full_name = COALESCE(p_full_name, full_name),
+        phone = COALESCE(p_phone, phone),
+        whatsapp = COALESCE(p_whatsapp, whatsapp),
+        telegram_id = COALESCE(p_telegram_id, telegram_id)
+    WHERE id = v_user_id;
+    
+    RETURN '✅ Admin contact updated successfully';
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
 -- Success message
 DO $$
 BEGIN
@@ -424,4 +613,39 @@ BEGIN
     RAISE NOTICE '📊 Tables: profiles, services, orders, invoices, payment_proofs, notifications, audit_logs';
     RAISE NOTICE '🔒 RLS policies enabled';
     RAISE NOTICE '🎯 Sample services inserted';
+    RAISE NOTICE '⏱️  Auto-timestamps: completed_at, cancelled_at added to orders';
+    RAISE NOTICE '🚀 Performance indexes created';
+    RAISE NOTICE '🔄 Migration scripts included for existing databases';
+    RAISE NOTICE '';
+    RAISE NOTICE '========================================';
+    RAISE NOTICE '👤 SETUP ADMIN USERS - FOLLOW THESE STEPS:';
+    RAISE NOTICE '========================================';
+    RAISE NOTICE '';
+    RAISE NOTICE '1️⃣  CREATE ADMIN USERS in Supabase Dashboard:';
+    RAISE NOTICE '   → Go to: Authentication → Users → Add User';
+    RAISE NOTICE '   → Create user with:';
+    RAISE NOTICE '      Email: admin1@rfsstore.com';
+    RAISE NOTICE '      Password: Admin@123';
+    RAISE NOTICE '      ✅ Auto Confirm User: YES';
+    RAISE NOTICE '';
+    RAISE NOTICE '2️⃣  PROMOTE TO ADMIN (run this query):';
+    RAISE NOTICE '   SELECT promote_user_to_admin(''admin1@rfsstore.com'');';
+    RAISE NOTICE '';
+    RAISE NOTICE '3️⃣  UPDATE CONTACT INFO (optional):';
+    RAISE NOTICE '   SELECT update_admin_contact(';
+    RAISE NOTICE '       ''admin1@rfsstore.com'',';
+    RAISE NOTICE '       ''Admin RFS Store 1'',';
+    RAISE NOTICE '       ''082181183590'',';
+    RAISE NOTICE '       ''6282181183590'',';
+    RAISE NOTICE '       ''5788748857''';
+    RAISE NOTICE '   );';
+    RAISE NOTICE '';
+    RAISE NOTICE '4️⃣  VERIFY ADMINS:';
+    RAISE NOTICE '   SELECT * FROM get_all_admins();';
+    RAISE NOTICE '';
+    RAISE NOTICE '========================================';
+    RAISE NOTICE '🔐 Default Admin Credentials:';
+    RAISE NOTICE '   Email: admin1@rfsstore.com';
+    RAISE NOTICE '   Password: Admin@123';
+    RAISE NOTICE '========================================';
 END $$;
