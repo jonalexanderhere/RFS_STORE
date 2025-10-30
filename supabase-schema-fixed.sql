@@ -715,18 +715,61 @@ EXCEPTION
         RAISE NOTICE 'Admin setup will run after users are created';
 END $$;
 
+-- ============================================
+-- PROMOTE SPECIFIC USERS TO ADMIN
+-- ============================================
+
+-- Promote specific user IDs to admin (if they exist)
+DO $$
+DECLARE
+    v_count INTEGER := 0;
+    v_admin_email TEXT;
+    v_admin_name TEXT;
+BEGIN
+    -- Promote user 88d321ac-b040-4707-8586-218ced262268
+    UPDATE public.profiles 
+    SET role = 'admin'
+    WHERE id = '88d321ac-b040-4707-8586-218ced262268'
+    AND role != 'admin';
+    
+    GET DIAGNOSTICS v_count = ROW_COUNT;
+    IF v_count > 0 THEN
+        RAISE NOTICE 'User 88d321ac-b040-4707-8586-218ced262268 promoted to admin';
+    END IF;
+    
+    -- Promote user 80efaa74-e5dc-46db-84e1-e9df3215f60c
+    UPDATE public.profiles 
+    SET role = 'admin'
+    WHERE id = '80efaa74-e5dc-46db-84e1-e9df3215f60c'
+    AND role != 'admin';
+    
+    GET DIAGNOSTICS v_count = ROW_COUNT;
+    IF v_count > 0 THEN
+        RAISE NOTICE 'User 80efaa74-e5dc-46db-84e1-e9df3215f60c promoted to admin';
+    END IF;
+    
+EXCEPTION
+    WHEN OTHERS THEN
+        RAISE NOTICE 'Note: User promotion will apply when users exist';
+END $$;
+
 -- Success message
 DO $$
 DECLARE
     v_admin_count INTEGER;
+    v_admin_rec RECORD;
 BEGIN
-    RAISE NOTICE '✅ Database schema created successfully!';
-    RAISE NOTICE '📊 Tables: profiles, services, orders, invoices, payment_proofs, notifications, audit_logs';
-    RAISE NOTICE '🔒 RLS policies enabled';
-    RAISE NOTICE '🎯 Sample services inserted';
-    RAISE NOTICE '⏱️  Auto-timestamps: completed_at, cancelled_at added to orders';
-    RAISE NOTICE '🚀 Performance indexes created';
-    RAISE NOTICE '🔄 Migration scripts included for existing databases';
+    RAISE NOTICE '';
+    RAISE NOTICE '========================================';
+    RAISE NOTICE 'DATABASE SCHEMA CREATED SUCCESSFULLY!';
+    RAISE NOTICE '========================================';
+    RAISE NOTICE '';
+    RAISE NOTICE '[OK] Tables: profiles, services, orders, invoices, payment_proofs, notifications, audit_logs';
+    RAISE NOTICE '[OK] RLS policies enabled with is_admin() function';
+    RAISE NOTICE '[OK] Infinite recursion FIXED';
+    RAISE NOTICE '[OK] Sample services inserted';
+    RAISE NOTICE '[OK] Auto-timestamps: completed_at, cancelled_at added';
+    RAISE NOTICE '[OK] Performance indexes created';
     RAISE NOTICE '';
     
     -- Check if there are any admins
@@ -736,33 +779,55 @@ BEGIN
     
     IF v_admin_count > 0 THEN
         RAISE NOTICE '========================================';
-        RAISE NOTICE '👤 ADMIN USERS FOUND: %', v_admin_count;
+        RAISE NOTICE 'ADMIN USERS: % found', v_admin_count;
         RAISE NOTICE '========================================';
-        RAISE NOTICE 'Run this to see admins:';
-        RAISE NOTICE 'SELECT * FROM get_all_admins();';
+        
+        -- Show admin emails
+        FOR v_admin_rec IN 
+            SELECT u.email 
+            FROM public.profiles p 
+            JOIN auth.users u ON p.id = u.id 
+            WHERE p.role = 'admin' 
+            ORDER BY p.created_at 
+            LIMIT 5
+        LOOP
+            RAISE NOTICE '  - %', v_admin_rec.email;
+        END LOOP;
+        
+        RAISE NOTICE '';
+        RAISE NOTICE 'Run this to see all admin details:';
+        RAISE NOTICE '  SELECT * FROM get_all_admins();';
+        RAISE NOTICE '';
+        RAISE NOTICE '========================================';
+        RAISE NOTICE 'NEXT STEPS:';
+        RAISE NOTICE '========================================';
+        RAISE NOTICE '1. Go to website';
+        RAISE NOTICE '2. LOGOUT if already logged in';
+        RAISE NOTICE '3. LOGIN with admin credentials';
+        RAISE NOTICE '4. Menu "Admin" will appear!';
+        RAISE NOTICE '';
+        RAISE NOTICE 'Auto-promoted user IDs:';
+        RAISE NOTICE '- 88d321ac-b040-4707-8586-218ced262268';
+        RAISE NOTICE '- 80efaa74-e5dc-46db-84e1-e9df3215f60c';
     ELSE
         RAISE NOTICE '========================================';
-        RAISE NOTICE '🤖 AUTO-ADMIN FEATURES ENABLED';
+        RAISE NOTICE 'AUTO-ADMIN FEATURES ENABLED';
         RAISE NOTICE '========================================';
         RAISE NOTICE '';
-        RAISE NOTICE '✨ OPTION 1: Register First User (AUTO-ADMIN)';
-        RAISE NOTICE '   → First user who registers will be AUTO-PROMOTED to admin';
-        RAISE NOTICE '   → Just register normally through the app';
+        RAISE NOTICE 'OPTION 1: Register First User (AUTO-ADMIN)';
+        RAISE NOTICE '  First user who registers = auto admin';
         RAISE NOTICE '';
-        RAISE NOTICE '✨ OPTION 2: Create Admin in Dashboard';
-        RAISE NOTICE '   → Supabase Dashboard → Authentication → Users → Add User';
-        RAISE NOTICE '   → Email: admin1@rfsstore.com';
-        RAISE NOTICE '   → Password: Admin@123';
-        RAISE NOTICE '   → ✅ Auto Confirm User: YES';
-        RAISE NOTICE '   → Then run: SELECT setup_default_admins();';
+        RAISE NOTICE 'OPTION 2: Promote Existing User by Email';
+        RAISE NOTICE '  SELECT promote_user_to_admin(''email@example.com'');';
         RAISE NOTICE '';
-        RAISE NOTICE '✨ OPTION 3: Promote Existing User';
-        RAISE NOTICE '   → SELECT promote_user_to_admin(''user@example.com'');';
-        RAISE NOTICE '';
-        RAISE NOTICE '========================================';
-        RAISE NOTICE '🔐 Recommended Admin Credentials:';
-        RAISE NOTICE '   Email: admin1@rfsstore.com';
-        RAISE NOTICE '   Password: Admin@123';
-        RAISE NOTICE '========================================';
+        RAISE NOTICE 'Target user IDs for auto-promotion:';
+        RAISE NOTICE '- 88d321ac-b040-4707-8586-218ced262268';
+        RAISE NOTICE '- 80efaa74-e5dc-46db-84e1-e9df3215f60c';
     END IF;
+    
+    RAISE NOTICE '';
+    RAISE NOTICE '========================================';
+    RAISE NOTICE 'SETUP COMPLETE!';
+    RAISE NOTICE '========================================';
+    RAISE NOTICE '';
 END $$;
