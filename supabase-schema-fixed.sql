@@ -254,6 +254,21 @@ DROP POLICY IF EXISTS "System can create notifications" ON public.notifications;
 DROP POLICY IF EXISTS "Admins can view audit logs" ON public.audit_logs;
 DROP POLICY IF EXISTS "System can create audit logs" ON public.audit_logs;
 
+-- ============================================
+-- HELPER FUNCTION TO CHECK ADMIN (Prevent Recursion)
+-- ============================================
+
+-- Function to check if current user is admin (security definer to bypass RLS)
+CREATE OR REPLACE FUNCTION public.is_admin()
+RETURNS BOOLEAN AS $$
+BEGIN
+    RETURN EXISTS (
+        SELECT 1 FROM public.profiles
+        WHERE id = auth.uid() AND role = 'admin'
+    );
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER STABLE;
+
 -- RLS Policies for profiles (PERMISSIVE for registration)
 
 -- Allow anyone authenticated to view their own profile
@@ -271,37 +286,22 @@ CREATE POLICY "Authenticated users can create profile" ON public.profiles
     FOR INSERT 
     WITH CHECK (auth.uid() IS NOT NULL);
 
--- Allow admins to view all profiles
+-- Allow admins to view all profiles (using security definer function)
 CREATE POLICY "Admins can view all profiles" ON public.profiles
     FOR SELECT 
-    USING (
-        EXISTS (
-            SELECT 1 FROM public.profiles
-            WHERE id = auth.uid() AND role = 'admin'
-        )
-    );
+    USING (public.is_admin());
 
--- Allow admins to update all profiles
+-- Allow admins to update all profiles (using security definer function)
 CREATE POLICY "Admins can update all profiles" ON public.profiles
     FOR UPDATE 
-    USING (
-        EXISTS (
-            SELECT 1 FROM public.profiles
-            WHERE id = auth.uid() AND role = 'admin'
-        )
-    );
+    USING (public.is_admin());
 
 -- RLS Policies for services (PUBLIC ACCESS - no login required)
 CREATE POLICY "Public can view active services" ON public.services
     FOR SELECT USING (is_active = true);
 
 CREATE POLICY "Admins can manage services" ON public.services
-    FOR ALL USING (
-        EXISTS (
-            SELECT 1 FROM public.profiles
-            WHERE id = auth.uid() AND role = 'admin'
-        )
-    );
+    FOR ALL USING (public.is_admin());
 
 -- RLS Policies for orders
 CREATE POLICY "Users can view their own orders" ON public.orders
@@ -311,40 +311,20 @@ CREATE POLICY "Users can create their own orders" ON public.orders
     FOR INSERT WITH CHECK (auth.uid() = user_id);
 
 CREATE POLICY "Admins can view all orders" ON public.orders
-    FOR SELECT USING (
-        EXISTS (
-            SELECT 1 FROM public.profiles
-            WHERE id = auth.uid() AND role = 'admin'
-        )
-    );
+    FOR SELECT USING (public.is_admin());
 
 CREATE POLICY "Admins can update all orders" ON public.orders
-    FOR UPDATE USING (
-        EXISTS (
-            SELECT 1 FROM public.profiles
-            WHERE id = auth.uid() AND role = 'admin'
-        )
-    );
+    FOR UPDATE USING (public.is_admin());
 
 -- RLS Policies for invoices
 CREATE POLICY "Users can view their own invoices" ON public.invoices
     FOR SELECT USING (auth.uid() = user_id);
 
 CREATE POLICY "Admins can view all invoices" ON public.invoices
-    FOR SELECT USING (
-        EXISTS (
-            SELECT 1 FROM public.profiles
-            WHERE id = auth.uid() AND role = 'admin'
-        )
-    );
+    FOR SELECT USING (public.is_admin());
 
 CREATE POLICY "Admins can manage invoices" ON public.invoices
-    FOR ALL USING (
-        EXISTS (
-            SELECT 1 FROM public.profiles
-            WHERE id = auth.uid() AND role = 'admin'
-        )
-    );
+    FOR ALL USING (public.is_admin());
 
 -- RLS Policies for payment_proofs
 CREATE POLICY "Users can view their own payment proofs" ON public.payment_proofs
@@ -354,20 +334,10 @@ CREATE POLICY "Users can create their own payment proofs" ON public.payment_proo
     FOR INSERT WITH CHECK (auth.uid() = user_id);
 
 CREATE POLICY "Admins can view all payment proofs" ON public.payment_proofs
-    FOR SELECT USING (
-        EXISTS (
-            SELECT 1 FROM public.profiles
-            WHERE id = auth.uid() AND role = 'admin'
-        )
-    );
+    FOR SELECT USING (public.is_admin());
 
 CREATE POLICY "Admins can verify payment proofs" ON public.payment_proofs
-    FOR UPDATE USING (
-        EXISTS (
-            SELECT 1 FROM public.profiles
-            WHERE id = auth.uid() AND role = 'admin'
-        )
-    );
+    FOR UPDATE USING (public.is_admin());
 
 -- RLS Policies for notifications
 CREATE POLICY "Users can view their own notifications" ON public.notifications
@@ -381,12 +351,7 @@ CREATE POLICY "System can create notifications" ON public.notifications
 
 -- RLS Policies for audit_logs
 CREATE POLICY "Admins can view audit logs" ON public.audit_logs
-    FOR SELECT USING (
-        EXISTS (
-            SELECT 1 FROM public.profiles
-            WHERE id = auth.uid() AND role = 'admin'
-        )
-    );
+    FOR SELECT USING (public.is_admin());
 
 CREATE POLICY "System can create audit logs" ON public.audit_logs
     FOR INSERT WITH CHECK (true);
@@ -606,8 +571,154 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
+-- ============================================
+-- AUTO-CREATE ADMIN FUNCTION
+-- ============================================
+
+-- Function to automatically create admin user
+CREATE OR REPLACE FUNCTION public.auto_create_admin_user(
+    p_email TEXT,
+    p_password TEXT,
+    p_full_name TEXT DEFAULT 'Admin User',
+    p_phone TEXT DEFAULT '',
+    p_whatsapp TEXT DEFAULT '',
+    p_telegram_id TEXT DEFAULT ''
+)
+RETURNS TEXT AS $$
+DECLARE
+    v_user_id UUID;
+    v_encrypted_password TEXT;
+BEGIN
+    -- Check if user already exists
+    SELECT id INTO v_user_id
+    FROM auth.users
+    WHERE email = p_email;
+    
+    IF v_user_id IS NOT NULL THEN
+        -- User exists, just promote to admin
+        UPDATE public.profiles
+        SET role = 'admin',
+            full_name = p_full_name,
+            phone = p_phone,
+            whatsapp = p_whatsapp,
+            telegram_id = p_telegram_id
+        WHERE id = v_user_id;
+        
+        RETURN '✅ User already exists. Promoted to admin: ' || p_email;
+    END IF;
+    
+    -- NOTE: Direct user creation with password requires service_role
+    -- This function expects to be called after manual user creation
+    -- Or use Supabase Dashboard/API to create user first
+    
+    RETURN '⚠️  User not found. Please create user manually first with email: ' || p_email;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Function to setup default admin users
+CREATE OR REPLACE FUNCTION public.setup_default_admins()
+RETURNS TEXT AS $$
+DECLARE
+    v_result TEXT := '';
+    v_admin1_id UUID;
+    v_admin2_id UUID;
+BEGIN
+    -- Check and promote admin1@rfsstore.com
+    SELECT id INTO v_admin1_id
+    FROM auth.users
+    WHERE email = 'admin1@rfsstore.com';
+    
+    IF v_admin1_id IS NOT NULL THEN
+        UPDATE public.profiles
+        SET role = 'admin',
+            full_name = 'Admin RFS Store 1',
+            phone = '082181183590',
+            whatsapp = '6282181183590',
+            telegram_id = '5788748857'
+        WHERE id = v_admin1_id;
+        v_result := v_result || '✅ Admin 1 setup complete' || E'\n';
+    ELSE
+        v_result := v_result || '⚠️  Admin 1 (admin1@rfsstore.com) not found' || E'\n';
+    END IF;
+    
+    -- Check and promote admin2@rfsstore.com
+    SELECT id INTO v_admin2_id
+    FROM auth.users
+    WHERE email = 'admin2@rfsstore.com';
+    
+    IF v_admin2_id IS NOT NULL THEN
+        UPDATE public.profiles
+        SET role = 'admin',
+            full_name = 'Admin RFS Store 2',
+            phone = '082176466707',
+            whatsapp = '6282176466707',
+            telegram_id = '6478150893'
+        WHERE id = v_admin2_id;
+        v_result := v_result || '✅ Admin 2 setup complete' || E'\n';
+    ELSE
+        v_result := v_result || '⚠️  Admin 2 (admin2@rfsstore.com) not found' || E'\n';
+    END IF;
+    
+    RETURN v_result;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- ============================================
+-- AUTO-PROMOTE FIRST USER AS ADMIN
+-- ============================================
+
+-- Function to auto-promote first registered user as admin
+CREATE OR REPLACE FUNCTION public.auto_promote_first_user()
+RETURNS TRIGGER AS $$
+DECLARE
+    v_user_count INTEGER;
+BEGIN
+    -- Count existing users
+    SELECT COUNT(*) INTO v_user_count
+    FROM auth.users;
+    
+    -- If this is the first user (count = 1), make them admin
+    IF v_user_count = 1 THEN
+        -- Update the profile that was just created
+        UPDATE public.profiles
+        SET role = 'admin',
+            full_name = COALESCE(NEW.raw_user_meta_data->>'full_name', 'First Admin')
+        WHERE id = NEW.id;
+        
+        RAISE NOTICE 'First user auto-promoted to admin: %', NEW.email;
+    END IF;
+    
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Create trigger to auto-promote first user
+DROP TRIGGER IF EXISTS auto_promote_first_user_trigger ON auth.users;
+CREATE TRIGGER auto_promote_first_user_trigger
+    AFTER INSERT ON auth.users
+    FOR EACH ROW
+    EXECUTE FUNCTION public.auto_promote_first_user();
+
+-- ============================================
+-- INSTANT ADMIN SETUP (if users exist)
+-- ============================================
+
+-- Try to setup default admins if they already exist
+DO $$
+DECLARE
+    v_setup_result TEXT;
+BEGIN
+    SELECT setup_default_admins() INTO v_setup_result;
+    RAISE NOTICE '%', v_setup_result;
+EXCEPTION
+    WHEN OTHERS THEN
+        RAISE NOTICE 'Admin setup will run after users are created';
+END $$;
+
 -- Success message
 DO $$
+DECLARE
+    v_admin_count INTEGER;
 BEGIN
     RAISE NOTICE '✅ Database schema created successfully!';
     RAISE NOTICE '📊 Tables: profiles, services, orders, invoices, payment_proofs, notifications, audit_logs';
@@ -617,35 +728,41 @@ BEGIN
     RAISE NOTICE '🚀 Performance indexes created';
     RAISE NOTICE '🔄 Migration scripts included for existing databases';
     RAISE NOTICE '';
-    RAISE NOTICE '========================================';
-    RAISE NOTICE '👤 SETUP ADMIN USERS - FOLLOW THESE STEPS:';
-    RAISE NOTICE '========================================';
-    RAISE NOTICE '';
-    RAISE NOTICE '1️⃣  CREATE ADMIN USERS in Supabase Dashboard:';
-    RAISE NOTICE '   → Go to: Authentication → Users → Add User';
-    RAISE NOTICE '   → Create user with:';
-    RAISE NOTICE '      Email: admin1@rfsstore.com';
-    RAISE NOTICE '      Password: Admin@123';
-    RAISE NOTICE '      ✅ Auto Confirm User: YES';
-    RAISE NOTICE '';
-    RAISE NOTICE '2️⃣  PROMOTE TO ADMIN (run this query):';
-    RAISE NOTICE '   SELECT promote_user_to_admin(''admin1@rfsstore.com'');';
-    RAISE NOTICE '';
-    RAISE NOTICE '3️⃣  UPDATE CONTACT INFO (optional):';
-    RAISE NOTICE '   SELECT update_admin_contact(';
-    RAISE NOTICE '       ''admin1@rfsstore.com'',';
-    RAISE NOTICE '       ''Admin RFS Store 1'',';
-    RAISE NOTICE '       ''082181183590'',';
-    RAISE NOTICE '       ''6282181183590'',';
-    RAISE NOTICE '       ''5788748857''';
-    RAISE NOTICE '   );';
-    RAISE NOTICE '';
-    RAISE NOTICE '4️⃣  VERIFY ADMINS:';
-    RAISE NOTICE '   SELECT * FROM get_all_admins();';
-    RAISE NOTICE '';
-    RAISE NOTICE '========================================';
-    RAISE NOTICE '🔐 Default Admin Credentials:';
-    RAISE NOTICE '   Email: admin1@rfsstore.com';
-    RAISE NOTICE '   Password: Admin@123';
-    RAISE NOTICE '========================================';
+    
+    -- Check if there are any admins
+    SELECT COUNT(*) INTO v_admin_count
+    FROM public.profiles
+    WHERE role = 'admin';
+    
+    IF v_admin_count > 0 THEN
+        RAISE NOTICE '========================================';
+        RAISE NOTICE '👤 ADMIN USERS FOUND: %', v_admin_count;
+        RAISE NOTICE '========================================';
+        RAISE NOTICE 'Run this to see admins:';
+        RAISE NOTICE 'SELECT * FROM get_all_admins();';
+    ELSE
+        RAISE NOTICE '========================================';
+        RAISE NOTICE '🤖 AUTO-ADMIN FEATURES ENABLED';
+        RAISE NOTICE '========================================';
+        RAISE NOTICE '';
+        RAISE NOTICE '✨ OPTION 1: Register First User (AUTO-ADMIN)';
+        RAISE NOTICE '   → First user who registers will be AUTO-PROMOTED to admin';
+        RAISE NOTICE '   → Just register normally through the app';
+        RAISE NOTICE '';
+        RAISE NOTICE '✨ OPTION 2: Create Admin in Dashboard';
+        RAISE NOTICE '   → Supabase Dashboard → Authentication → Users → Add User';
+        RAISE NOTICE '   → Email: admin1@rfsstore.com';
+        RAISE NOTICE '   → Password: Admin@123';
+        RAISE NOTICE '   → ✅ Auto Confirm User: YES';
+        RAISE NOTICE '   → Then run: SELECT setup_default_admins();';
+        RAISE NOTICE '';
+        RAISE NOTICE '✨ OPTION 3: Promote Existing User';
+        RAISE NOTICE '   → SELECT promote_user_to_admin(''user@example.com'');';
+        RAISE NOTICE '';
+        RAISE NOTICE '========================================';
+        RAISE NOTICE '🔐 Recommended Admin Credentials:';
+        RAISE NOTICE '   Email: admin1@rfsstore.com';
+        RAISE NOTICE '   Password: Admin@123';
+        RAISE NOTICE '========================================';
+    END IF;
 END $$;
